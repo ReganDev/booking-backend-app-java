@@ -64,7 +64,7 @@ public class AuthService {
                 .name(request.getBusinessName())
                 .slug(slug)
                 .email(request.getEmail())
-                .timezone(request.getTimezone() != null ? request.getTimezone() : "United Kingdom/Belfast")
+                .timezone(request.getTimezone() != null ? request.getTimezone() : "Europe/London")
                 .currency(request.getCurrency() != null ? request.getCurrency() : "GBP")
                 .isActive(true)
                 .build();

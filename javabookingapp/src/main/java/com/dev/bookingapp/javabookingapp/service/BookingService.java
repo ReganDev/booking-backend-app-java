@@ -2,7 +2,9 @@ package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.dto.request.BookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.BookingStatusRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
+import com.dev.bookingapp.javabookingapp.dto.response.CustomerResponse;
 import com.dev.bookingapp.javabookingapp.entity.*;
 import com.dev.bookingapp.javabookingapp.entity.enums.BookingStatus;
 import com.dev.bookingapp.javabookingapp.exception.BadRequestException;
@@ -29,6 +31,7 @@ public class BookingService {
     private final CustomerService customerService;
     private final ServiceService serviceService;
     private final UserService userService;
+    private final AvailabilityService availabilityService;
 
     @Transactional(readOnly = true)
     public BookingResponse getById(UUID businessId, UUID bookingId) {
@@ -58,6 +61,36 @@ public class BookingService {
                 .stream()
                 .map(bookingMapper::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public BookingResponse createPublicBooking(UUID businessId, PublicBookingRequest request) {
+        Business business = businessService.getEntityById(businessId);
+        if (!Boolean.TRUE.equals(business.getIsActive())) {
+            throw new BadRequestException("This business is not currently accepting bookings");
+        }
+
+        Service service = serviceService.getEntityById(request.getServiceId());
+        if (!service.getBusiness().getId().equals(businessId)) {
+            throw new BadRequestException("Service does not belong to this business");
+        }
+        if (!Boolean.TRUE.equals(service.getIsActive())) {
+            throw new BadRequestException("This service is not available to book");
+        }
+
+        // Reject anything that isn't an open slot on the business schedule
+        // (covers opening hours, breaks, blocked times, notice/advance limits and clashes)
+        availabilityService.ensureSlotAvailable(business, service, request.getStartDatetime());
+
+        CustomerResponse customer = customerService.getOrCreate(businessId, request.getCustomer());
+
+        BookingRequest bookingRequest = new BookingRequest();
+        bookingRequest.setCustomerId(customer.getId());
+        bookingRequest.setServiceId(request.getServiceId());
+        bookingRequest.setStartDatetime(request.getStartDatetime());
+        bookingRequest.setCustomerNotes(request.getCustomerNotes());
+
+        return create(businessId, bookingRequest);
     }
 
     @Transactional
@@ -97,6 +130,13 @@ public class BookingService {
                     staff.getId(), request.getStartDatetime(), endDatetime, null);
             if (!conflicts.isEmpty()) {
                 throw new ConflictException("Staff member has a conflicting booking at this time");
+            }
+        } else {
+            // No staff assigned: treat the whole business as a single resource
+            List<Booking> conflicts = bookingRepository.findConflictingBusinessBookings(
+                    businessId, request.getStartDatetime(), endDatetime, null);
+            if (!conflicts.isEmpty()) {
+                throw new ConflictException("There is already a booking at this time");
             }
         }
 
@@ -153,6 +193,12 @@ public class BookingService {
                     booking.getStaff().getId(), newStartTime, newEndTime, booking.getId());
             if (!conflicts.isEmpty()) {
                 throw new ConflictException("Staff member has a conflicting booking at this time");
+            }
+        } else {
+            List<Booking> conflicts = bookingRepository.findConflictingBusinessBookings(
+                    booking.getBusiness().getId(), newStartTime, newEndTime, booking.getId());
+            if (!conflicts.isEmpty()) {
+                throw new ConflictException("There is already a booking at this time");
             }
         }
 

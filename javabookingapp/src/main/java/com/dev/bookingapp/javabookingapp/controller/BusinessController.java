@@ -17,9 +17,9 @@ public class BusinessController {
 
     private final BusinessService businessService;
 
-    @GetMapping("/{id}")
-    public ResponseEntity<BusinessResponse> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(businessService.getById(id));
+    @GetMapping("/{businessId}")
+    public ResponseEntity<BusinessResponse> getById(@PathVariable UUID businessId) {
+        return ResponseEntity.ok(businessService.getById(businessId));
     }
 
     @GetMapping("/slug/{slug}")
@@ -27,10 +27,10 @@ public class BusinessController {
         return ResponseEntity.ok(businessService.getBySlug(slug));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{businessId}")
     public ResponseEntity<BusinessResponse> update(
-            @PathVariable UUID id,
+            @PathVariable UUID businessId,
             @Valid @RequestBody BusinessRequest request) {
-        return ResponseEntity.ok(businessService.update(id, request));
+        return ResponseEntity.ok(businessService.update(businessId, request));
     }
 }

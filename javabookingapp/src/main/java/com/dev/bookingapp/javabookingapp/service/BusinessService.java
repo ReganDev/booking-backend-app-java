@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -27,6 +28,14 @@ public class BusinessService {
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
 
     @Transactional(readOnly = true)
+    public List<BusinessResponse> listActive() {
+        return businessRepository.findAllByIsActiveTrueOrderByNameAsc()
+                .stream()
+                .map(businessMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public BusinessResponse getById(UUID id) {
         Business business = businessRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Business", "id", id));
@@ -36,6 +45,14 @@ public class BusinessService {
     @Transactional(readOnly = true)
     public BusinessResponse getBySlug(String slug) {
         Business business = businessRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Business", "slug", slug));
+        return businessMapper.toResponse(business);
+    }
+
+    @Transactional(readOnly = true)
+    public BusinessResponse getActiveBySlug(String slug) {
+        Business business = businessRepository.findBySlug(slug)
+                .filter(b -> Boolean.TRUE.equals(b.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Business", "slug", slug));
         return businessMapper.toResponse(business);
     }

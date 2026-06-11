@@ -49,6 +49,15 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
                                           @Param("excludeBookingId") UUID excludeBookingId);
 
     @Query("SELECT b FROM Booking b WHERE b.business.id = :businessId " +
+           "AND b.startDatetime < :end AND b.endDatetime > :start " +
+           "AND b.status NOT IN ('CANCELLED') " +
+           "AND (:excludeBookingId IS NULL OR b.id != :excludeBookingId)")
+    List<Booking> findConflictingBusinessBookings(@Param("businessId") UUID businessId,
+                                                  @Param("start") OffsetDateTime start,
+                                                  @Param("end") OffsetDateTime end,
+                                                  @Param("excludeBookingId") UUID excludeBookingId);
+
+    @Query("SELECT b FROM Booking b WHERE b.business.id = :businessId " +
            "AND b.status = :status " +
            "ORDER BY b.startDatetime ASC")
     Page<Booking> findByBusinessIdAndStatus(@Param("businessId") UUID businessId,

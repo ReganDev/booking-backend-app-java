@@ -50,7 +50,7 @@ public class Business extends BaseEntity {
     // Settings
     @Builder.Default
     @Column(nullable = false)
-    private String timezone = "United Kingdom/Belfast";
+    private String timezone = "Europe/London";
 
     @Builder.Default
     @Column(nullable = false, length = 3)
