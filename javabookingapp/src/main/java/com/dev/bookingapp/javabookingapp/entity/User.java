@@ -42,7 +42,7 @@ public class User extends BaseEntity {
     private String avatarUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "user_role")
     @Builder.Default
     private UserRole role = UserRole.STAFF;
 
