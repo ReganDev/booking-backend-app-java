@@ -51,6 +51,13 @@ public class CustomerController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    @PostMapping("/get-or-create")
+    public ResponseEntity<CustomerResponse> getOrCreate(
+            @PathVariable UUID businessId,
+            @Valid @RequestBody CustomerRequest request) {
+        return ResponseEntity.ok(customerService.getOrCreate(businessId, request));
+    }
+
     @PutMapping("/{customerId}")
     public ResponseEntity<CustomerResponse> update(
             @PathVariable UUID businessId,
