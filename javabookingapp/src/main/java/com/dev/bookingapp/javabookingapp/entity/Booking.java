@@ -4,6 +4,8 @@ import com.dev.bookingapp.javabookingapp.entity.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -40,6 +42,7 @@ public class Booking extends BaseEntity {
     private OffsetDateTime endDatetime;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false)
     @Builder.Default
     private BookingStatus status = BookingStatus.PENDING;

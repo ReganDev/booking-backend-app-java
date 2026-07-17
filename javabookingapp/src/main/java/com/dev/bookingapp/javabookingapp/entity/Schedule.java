@@ -4,6 +4,8 @@ import com.dev.bookingapp.javabookingapp.entity.enums.DayOfWeek;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -29,6 +31,7 @@ public class Schedule extends BaseEntity {
     private User user;  // NULL = business-wide schedule
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "day_of_week", nullable = false)
     private DayOfWeek dayOfWeek;
 
