@@ -1,5 +1,6 @@
 package com.dev.bookingapp.javabookingapp.controller;
 
+import com.dev.bookingapp.javabookingapp.dto.request.EnquiryRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.BusinessResponse;
@@ -8,6 +9,7 @@ import com.dev.bookingapp.javabookingapp.dto.response.TimeSlotResponse;
 import com.dev.bookingapp.javabookingapp.service.AvailabilityService;
 import com.dev.bookingapp.javabookingapp.service.BookingService;
 import com.dev.bookingapp.javabookingapp.service.BusinessService;
+import com.dev.bookingapp.javabookingapp.service.EnquiryService;
 import com.dev.bookingapp.javabookingapp.service.ServiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,13 @@ public class PublicController {
     private final ServiceService serviceService;
     private final BookingService bookingService;
     private final AvailabilityService availabilityService;
+    private final EnquiryService enquiryService;
+
+    @PostMapping("/enquiry")
+    public ResponseEntity<Void> submitEnquiry(@Valid @RequestBody EnquiryRequest request) {
+        enquiryService.sendEnquiry(request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+    }
 
     @GetMapping("/businesses")
     public ResponseEntity<List<BusinessResponse>> listBusinesses() {

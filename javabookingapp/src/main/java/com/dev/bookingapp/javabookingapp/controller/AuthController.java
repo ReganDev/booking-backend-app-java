@@ -4,9 +4,11 @@ import com.dev.bookingapp.javabookingapp.dto.request.LoginRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.RefreshTokenRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.RegisterRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.AuthResponse;
+import com.dev.bookingapp.javabookingapp.exception.ForbiddenException;
 import com.dev.bookingapp.javabookingapp.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,8 +20,17 @@ public class AuthController {
 
     private final AuthService authService;
 
+    // Accounts are provisioned by the site owner; self-registration stays off
+    // in production unless REGISTRATION_ENABLED is set.
+    @Value("${app.registration-enabled:true}")
+    private boolean registrationEnabled;
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        if (!registrationEnabled) {
+            throw new ForbiddenException(
+                    "Self-registration is disabled. Please contact us to request an account.");
+        }
         AuthResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
