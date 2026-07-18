@@ -21,4 +21,8 @@ public class PublicBookingRequest {
     private OffsetDateTime startDatetime;
 
     private String customerNotes;
+
+    private Boolean emailReminder;
+
+    private Boolean smsReminder;
 }

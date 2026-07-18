@@ -21,6 +21,8 @@ public class BookingResponse {
     private String internalNotes;
     private OffsetDateTime cancelledAt;
     private String cancellationReason;
+    private Boolean emailReminder;
+    private Boolean smsReminder;
     private OffsetDateTime createdAt;
 
     // Nested info

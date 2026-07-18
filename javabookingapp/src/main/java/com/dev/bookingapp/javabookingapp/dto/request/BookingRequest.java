@@ -22,4 +22,6 @@ public class BookingRequest {
 
     private String customerNotes;
     private String internalNotes;
+    private Boolean emailReminder;
+    private Boolean smsReminder;
 }

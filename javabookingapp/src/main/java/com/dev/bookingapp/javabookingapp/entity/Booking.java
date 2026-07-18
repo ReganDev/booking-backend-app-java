@@ -61,4 +61,12 @@ public class Booking extends BaseEntity {
 
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
+
+    @Column(name = "email_reminder", nullable = false)
+    @Builder.Default
+    private Boolean emailReminder = false;
+
+    @Column(name = "sms_reminder", nullable = false)
+    @Builder.Default
+    private Boolean smsReminder = false;
 }

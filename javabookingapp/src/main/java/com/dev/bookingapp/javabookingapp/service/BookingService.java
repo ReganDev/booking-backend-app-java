@@ -32,6 +32,7 @@ public class BookingService {
     private final ServiceService serviceService;
     private final UserService userService;
     private final AvailabilityService availabilityService;
+    private final BookingNotificationService bookingNotificationService;
 
     @Transactional(readOnly = true)
     public BookingResponse getById(UUID businessId, UUID bookingId) {
@@ -89,8 +90,17 @@ public class BookingService {
         bookingRequest.setServiceId(request.getServiceId());
         bookingRequest.setStartDatetime(request.getStartDatetime());
         bookingRequest.setCustomerNotes(request.getCustomerNotes());
+        bookingRequest.setEmailReminder(Boolean.TRUE.equals(request.getEmailReminder()));
+        bookingRequest.setSmsReminder(Boolean.TRUE.equals(request.getSmsReminder()));
 
-        return create(businessId, bookingRequest);
+        BookingResponse created = create(businessId, bookingRequest);
+
+        if (Boolean.TRUE.equals(request.getEmailReminder())) {
+            // Best-effort: an email failure never fails the booking
+            bookingNotificationService.sendBookingDetails(business, created, customer.getEmail());
+        }
+
+        return created;
     }
 
     @Transactional
