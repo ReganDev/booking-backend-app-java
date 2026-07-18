@@ -1,5 +1,6 @@
 package com.dev.bookingapp.javabookingapp.service;
 
+import com.dev.bookingapp.javabookingapp.dto.request.CustomerRegisterRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.LoginRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.RefreshTokenRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.RegisterRequest;
@@ -91,6 +92,30 @@ public class AuthService {
     }
 
     @Transactional
+    public AuthResponse registerCustomer(CustomerRegisterRequest request) {
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new ConflictException("Email is already registered");
+        }
+
+        User user = User.builder()
+                .business(null)
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .phone(request.getPhone())
+                .role(UserRole.CUSTOMER)
+                .isActive(true)
+                .emailVerified(false)
+                .acceptsBookings(false)
+                .build();
+
+        user = userRepository.save(user);
+
+        return generateAuthResponse(user);
+    }
+
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
@@ -148,7 +173,7 @@ public class AuthService {
     private AuthResponse generateAuthResponse(User user) {
         String accessToken = jwtService.generateAccessToken(
                 user.getId(),
-                user.getBusiness().getId(),
+                user.getBusiness() != null ? user.getBusiness().getId() : null,
                 user.getEmail(),
                 user.getRole().name()
         );
@@ -164,7 +189,8 @@ public class AuthService {
         refreshTokenRepository.save(storedToken);
 
         UserResponse userResponse = userMapper.toResponse(user);
-        BusinessResponse businessResponse = businessMapper.toResponse(user.getBusiness());
+        BusinessResponse businessResponse =
+                user.getBusiness() != null ? businessMapper.toResponse(user.getBusiness()) : null;
 
         return AuthResponse.builder()
                 .accessToken(accessToken)

@@ -21,7 +21,9 @@ public class JwtService {
 
     public String generateAccessToken(UUID userId, UUID businessId, String email, String role) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("businessId", businessId.toString());
+        if (businessId != null) {
+            claims.put("businessId", businessId.toString());
+        }
         claims.put("email", email);
         claims.put("role", role);
 
@@ -62,7 +64,8 @@ public class JwtService {
 
     public UUID getBusinessIdFromToken(String token) {
         Claims claims = extractAllClaims(token);
-        return UUID.fromString(claims.get("businessId", String.class));
+        String businessId = claims.get("businessId", String.class);
+        return businessId != null ? UUID.fromString(businessId) : null;
     }
 
     public String getEmailFromToken(String token) {

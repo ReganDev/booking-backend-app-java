@@ -22,8 +22,9 @@ import java.util.List;
 @SuperBuilder
 public class User extends BaseEntity {
 
+    // Null for customer accounts, which are not tied to any business
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "business_id", nullable = false)
+    @JoinColumn(name = "business_id")
     private Business business;
 
     @Column(nullable = false)

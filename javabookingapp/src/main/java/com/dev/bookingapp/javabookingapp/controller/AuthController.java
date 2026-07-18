@@ -1,5 +1,6 @@
 package com.dev.bookingapp.javabookingapp.controller;
 
+import com.dev.bookingapp.javabookingapp.dto.request.CustomerRegisterRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.LoginRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.RefreshTokenRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.RegisterRequest;
@@ -32,6 +33,15 @@ public class AuthController {
                     "Self-registration is disabled. Please contact us to request an account.");
         }
         AuthResponse response = authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    // Customer accounts are open to everyone; only business registration is
+    // gated behind app.registration-enabled.
+    @PostMapping("/register-customer")
+    public ResponseEntity<AuthResponse> registerCustomer(
+            @Valid @RequestBody CustomerRegisterRequest request) {
+        AuthResponse response = authService.registerCustomer(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

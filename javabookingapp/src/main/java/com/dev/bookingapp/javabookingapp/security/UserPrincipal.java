@@ -32,7 +32,7 @@ public class UserPrincipal implements UserDetails {
 
         return UserPrincipal.builder()
                 .id(user.getId())
-                .businessId(user.getBusiness().getId())
+                .businessId(user.getBusiness() != null ? user.getBusiness().getId() : null)
                 .email(user.getEmail())
                 .password(user.getPasswordHash())
                 .role(user.getRole().name())

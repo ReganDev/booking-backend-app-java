@@ -37,7 +37,13 @@ public class TenantAccessInterceptor implements HandlerInterceptor {
         }
 
         String businessId = pathVariables.get("businessId");
-        if (businessId == null || businessId.equals(principal.getBusinessId().toString())) {
+        if (businessId == null) {
+            return true;
+        }
+        // Customer accounts have no business, so they can never reach
+        // business-scoped management endpoints.
+        if (principal.getBusinessId() != null
+                && businessId.equals(principal.getBusinessId().toString())) {
             return true;
         }
 
