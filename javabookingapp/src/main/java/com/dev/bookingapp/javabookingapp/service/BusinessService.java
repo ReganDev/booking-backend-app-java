@@ -28,6 +28,14 @@ public class BusinessService {
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
 
     @Transactional(readOnly = true)
+    public List<BusinessResponse> listAll() {
+        return businessRepository.findAll(org.springframework.data.domain.Sort.by("name"))
+                .stream()
+                .map(businessMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<BusinessResponse> listActive() {
         return businessRepository.findAllByIsActiveTrueOrderByNameAsc()
                 .stream()

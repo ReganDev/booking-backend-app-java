@@ -54,6 +54,14 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        User user = createBusinessWithOwner(request);
+        return generateAuthResponse(user);
+    }
+
+    /** Creates a business and its owner account. Shared by self-registration
+     *  and the admin console. */
+    @Transactional
+    public User createBusinessWithOwner(RegisterRequest request) {
         // Check if email already exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new ConflictException("Email is already registered");
@@ -86,9 +94,7 @@ public class AuthService {
                 .acceptsBookings(true)
                 .build();
 
-        user = userRepository.save(user);
-
-        return generateAuthResponse(user);
+        return userRepository.save(user);
     }
 
     @Transactional
