@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,6 +48,14 @@ public class PublicController {
     @GetMapping("/businesses/slug/{slug}")
     public ResponseEntity<BusinessResponse> getBusinessBySlug(@PathVariable String slug) {
         return ResponseEntity.ok(businessService.getActiveBySlug(slug));
+    }
+
+    @GetMapping("/businesses/{businessId}/availability/days")
+    public ResponseEntity<List<LocalDate>> getAvailableDays(
+            @PathVariable UUID businessId,
+            @RequestParam UUID serviceId,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth month) {
+        return ResponseEntity.ok(availabilityService.getAvailableDays(businessId, serviceId, month));
     }
 
     @GetMapping("/businesses/{businessId}/availability")

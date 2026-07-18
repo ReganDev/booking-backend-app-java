@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +51,32 @@ public class AvailabilityService {
         }
 
         return computeSlots(business, service, date);
+    }
+
+    /** Days in the given month that have at least one bookable slot.
+     *  Days outside the booking window come back empty from computeSlots,
+     *  so past days and days beyond the advance limit are excluded. */
+    @Transactional(readOnly = true)
+    public List<LocalDate> getAvailableDays(UUID businessId, UUID serviceId, YearMonth month) {
+        Business business = businessService.getEntityById(businessId);
+        com.dev.bookingapp.javabookingapp.entity.Service service = serviceService.getEntityById(serviceId);
+
+        if (!service.getBusiness().getId().equals(businessId)) {
+            throw new BadRequestException("Service does not belong to this business");
+        }
+
+        if (!Boolean.TRUE.equals(business.getIsActive()) || !Boolean.TRUE.equals(service.getIsActive())) {
+            return List.of();
+        }
+
+        List<LocalDate> days = new ArrayList<>();
+        for (int day = 1; day <= month.lengthOfMonth(); day++) {
+            LocalDate date = month.atDay(day);
+            if (!computeSlots(business, service, date).isEmpty()) {
+                days.add(date);
+            }
+        }
+        return days;
     }
 
     public void ensureSlotAvailable(Business business,
