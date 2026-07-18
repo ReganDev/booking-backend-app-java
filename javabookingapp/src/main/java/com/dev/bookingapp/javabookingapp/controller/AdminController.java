@@ -19,9 +19,12 @@ import java.util.List;
 
 /** Platform-admin endpoints. The admin account is seeded from environment
  *  variables and has no business, so tenant-scoped routes never apply. */
+// The platform admin is the ADMIN role with no business attached; requiring
+// a null businessId means a hypothetical business-scoped ADMIN user could
+// still never reach these endpoints.
 @RestController
 @RequestMapping("/api/v1/admin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('ADMIN') and principal.businessId == null")
 @RequiredArgsConstructor
 public class AdminController {
 
