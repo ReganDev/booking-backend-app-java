@@ -23,6 +23,7 @@ public class BusinessResponse {
     private String timezone;
     private String currency;
     private String logoUrl;
+    private java.util.List<String> photoUrls;
     private Integer bookingAdvanceDays;
     private Integer bookingNoticeHours;
     private Integer cancellationNoticeHours;

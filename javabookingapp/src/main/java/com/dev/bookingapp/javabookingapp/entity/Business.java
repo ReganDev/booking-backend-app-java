@@ -59,6 +59,11 @@ public class Business extends BaseEntity {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    @Builder.Default
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.ARRAY)
+    @Column(name = "photo_urls", columnDefinition = "text[]")
+    private List<String> photoUrls = new ArrayList<>();
+
     // Booking settings
     @Builder.Default
     @Column(name = "booking_advance_days")
