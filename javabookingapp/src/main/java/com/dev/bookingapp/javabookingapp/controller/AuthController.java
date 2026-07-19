@@ -8,6 +8,7 @@ import com.dev.bookingapp.javabookingapp.dto.response.MessageResponse;
 import com.dev.bookingapp.javabookingapp.exception.ForbiddenException;
 import com.dev.bookingapp.javabookingapp.service.AuthService;
 import com.dev.bookingapp.javabookingapp.service.EmailVerificationService;
+import com.dev.bookingapp.javabookingapp.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
 
     // Accounts are provisioned by the site owner; self-registration stays off
     // in production unless REGISTRATION_ENABLED is set.
@@ -62,6 +64,22 @@ public class AuthController {
         emailVerificationService.resend(request.getEmail());
         return ResponseEntity.accepted().body(new MessageResponse(
                 "If an unverified account exists, a verification email will be sent."));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request.getEmail());
+        return ResponseEntity.accepted().body(new MessageResponse(
+                "If an account exists for that email, a password reset link will be sent."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.reset(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(new MessageResponse(
+                "Password reset successfully. You can now sign in with your new password."));
     }
 
     @PostMapping("/login")

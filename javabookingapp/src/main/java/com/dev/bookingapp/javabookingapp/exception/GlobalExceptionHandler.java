@@ -89,12 +89,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(EmailDeliveryException.class)
     public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException ex) {
+        log.error("Verification email delivery failed", ex);
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(OffsetDateTime.now())
                 .status(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .error("Email Delivery Unavailable")
+                .error("Service Unavailable")
                 .code("EMAIL_DELIVERY_UNAVAILABLE")
-                .message(ex.getMessage())
+                .message("We couldn't send your verification email right now. Please try again in a few minutes.")
                 .build();
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
     }
