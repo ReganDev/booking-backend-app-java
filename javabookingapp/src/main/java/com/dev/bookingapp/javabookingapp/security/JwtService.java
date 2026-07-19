@@ -17,6 +17,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JwtService {
 
+    public static final String ACCESS_TOKEN_TYPE = "access";
+    public static final String REFRESH_TOKEN_TYPE = "refresh";
+
     private final JwtConfig jwtConfig;
 
     public String generateAccessToken(UUID userId, UUID businessId, String email, String role) {
@@ -26,6 +29,7 @@ public class JwtService {
         }
         claims.put("email", email);
         claims.put("role", role);
+        claims.put("tokenType", ACCESS_TOKEN_TYPE);
 
         return Jwts.builder()
                 .claims(claims)
@@ -38,6 +42,7 @@ public class JwtService {
 
     public String generateRefreshToken(UUID userId) {
         return Jwts.builder()
+                .claim("tokenType", REFRESH_TOKEN_TYPE)
                 .subject(userId.toString())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + jwtConfig.getRefreshTokenExpirationMs()))
@@ -55,6 +60,18 @@ public class JwtService {
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+    }
+
+    public boolean validateAccessToken(String token) {
+        return validateToken(token) && ACCESS_TOKEN_TYPE.equals(getTokenType(token));
+    }
+
+    public boolean validateRefreshToken(String token) {
+        return validateToken(token) && REFRESH_TOKEN_TYPE.equals(getTokenType(token));
+    }
+
+    public String getTokenType(String token) {
+        return extractAllClaims(token).get("tokenType", String.class);
     }
 
     public UUID getUserIdFromToken(String token) {

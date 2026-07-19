@@ -10,6 +10,7 @@ import com.dev.bookingapp.javabookingapp.exception.ForbiddenException;
 import com.dev.bookingapp.javabookingapp.exception.ResourceNotFoundException;
 import com.dev.bookingapp.javabookingapp.mapper.UserMapper;
 import com.dev.bookingapp.javabookingapp.repository.UserRepository;
+import com.dev.bookingapp.javabookingapp.repository.RefreshTokenRepository;
 import com.dev.bookingapp.javabookingapp.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import java.time.OffsetDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,8 @@ public class UserService {
     private final UserMapper userMapper;
     private final BusinessService businessService;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final EmailVerificationService emailVerificationService;
 
     @Transactional(readOnly = true)
     public UserResponse getById(UUID businessId, UUID userId) {
@@ -63,9 +67,10 @@ public class UserService {
     @Transactional
     public UserResponse create(UUID businessId, UserRequest request, String password) {
         Business business = businessService.getEntityById(businessId);
+        request.setEmail(EmailVerificationService.normalizeEmail(request.getEmail()));
 
-        if (userRepository.existsByBusinessIdAndEmail(businessId, request.getEmail())) {
-            throw new ConflictException("A user with this email already exists in this business");
+        if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+            throw new ConflictException("Email is already registered");
         }
 
         User user = userMapper.toEntity(request);
@@ -84,9 +89,12 @@ public class UserService {
                 .filter(u -> u.getBusiness().getId().equals(businessId))
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
-            if (userRepository.existsByBusinessIdAndEmail(businessId, request.getEmail())) {
-                throw new ConflictException("A user with this email already exists in this business");
+        boolean emailChanged = false;
+        if (request.getEmail() != null) {
+            request.setEmail(EmailVerificationService.normalizeEmail(request.getEmail()));
+            emailChanged = !request.getEmail().equals(user.getEmail());
+            if (emailChanged && userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+                throw new ConflictException("Email is already registered");
             }
         }
 
@@ -102,7 +110,14 @@ public class UserService {
         }
 
         userMapper.updateEntity(request, user);
+        if (emailChanged && EmailVerificationService.requiresVerification(user)) {
+            user.setEmailVerified(false);
+            refreshTokenRepository.revokeAllByUserId(user.getId(), OffsetDateTime.now());
+        }
         User saved = userRepository.save(user);
+        if (emailChanged) {
+            emailVerificationService.issueFor(saved);
+        }
         return userMapper.toResponse(saved);
     }
 
@@ -120,6 +135,7 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
         user.setIsActive(false);
+        refreshTokenRepository.revokeAllByUserId(user.getId(), OffsetDateTime.now());
         userRepository.save(user);
     }
 }

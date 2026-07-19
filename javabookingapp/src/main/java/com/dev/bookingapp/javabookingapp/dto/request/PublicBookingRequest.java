@@ -1,6 +1,5 @@
 package com.dev.bookingapp.javabookingapp.dto.request;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -10,8 +9,7 @@ import java.util.UUID;
 @Data
 public class PublicBookingRequest {
 
-    @Valid
-    @NotNull(message = "Customer details are required")
+    // Retained for wire compatibility; authenticated account identity is authoritative.
     private CustomerRequest customer;
 
     @NotNull(message = "Service ID is required")

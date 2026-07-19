@@ -2,6 +2,7 @@ package com.dev.bookingapp.javabookingapp.security;
 
 import com.dev.bookingapp.javabookingapp.entity.User;
 import com.dev.bookingapp.javabookingapp.repository.UserRepository;
+import com.dev.bookingapp.javabookingapp.service.EmailVerificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -20,7 +21,8 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailIgnoreCase(
+                        EmailVerificationService.normalizeEmail(email))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
         return UserPrincipal.fromUser(user);
     }

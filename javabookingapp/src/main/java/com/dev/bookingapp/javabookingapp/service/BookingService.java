@@ -65,7 +65,16 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse createPublicBooking(UUID businessId, PublicBookingRequest request) {
+    public BookingResponse createPublicBooking(UUID businessId, PublicBookingRequest request,
+                                               UUID authenticatedUserId) {
+        User account = userService.getEntityById(authenticatedUserId);
+        if (account.getRole() != com.dev.bookingapp.javabookingapp.entity.enums.UserRole.CUSTOMER
+                || !Boolean.TRUE.equals(account.getIsActive())
+                || !Boolean.TRUE.equals(account.getEmailVerified())) {
+            throw new com.dev.bookingapp.javabookingapp.exception.ForbiddenException(
+                    "A verified customer account is required");
+        }
+
         Business business = businessService.getEntityById(businessId);
         if (!Boolean.TRUE.equals(business.getIsActive())) {
             throw new BadRequestException("This business is not currently accepting bookings");
@@ -83,7 +92,7 @@ public class BookingService {
         // (covers opening hours, breaks, blocked times, notice/advance limits and clashes)
         availabilityService.ensureSlotAvailable(business, service, request.getStartDatetime());
 
-        CustomerResponse customer = customerService.getOrCreate(businessId, request.getCustomer());
+        CustomerResponse customer = customerService.getOrCreateFromUser(businessId, account);
 
         BookingRequest bookingRequest = new BookingRequest();
         bookingRequest.setCustomerId(customer.getId());
@@ -97,7 +106,7 @@ public class BookingService {
 
         if (Boolean.TRUE.equals(request.getEmailReminder())) {
             // Best-effort: an email failure never fails the booking
-            bookingNotificationService.sendBookingDetails(business, created, customer.getEmail());
+            bookingNotificationService.sendBookingDetails(business, created, account.getEmail());
         }
 
         return created;

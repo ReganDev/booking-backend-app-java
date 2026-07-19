@@ -23,6 +23,7 @@ public class UserPrincipal implements UserDetails {
     private String password;
     private String role;
     private Boolean isActive;
+    private Boolean emailVerified;
     private Collection<? extends GrantedAuthority> authorities;
 
     public static UserPrincipal fromUser(User user) {
@@ -37,6 +38,7 @@ public class UserPrincipal implements UserDetails {
                 .password(user.getPasswordHash())
                 .role(user.getRole().name())
                 .isActive(user.getIsActive())
+                .emailVerified(user.getEmailVerified())
                 .authorities(authorities)
                 .build();
     }
@@ -73,6 +75,8 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return isActive;
+        return Boolean.TRUE.equals(isActive)
+                && (!"OWNER".equals(role) && !"CUSTOMER".equals(role)
+                    || Boolean.TRUE.equals(emailVerified));
     }
 }

@@ -3,6 +3,7 @@ package com.dev.bookingapp.javabookingapp.config;
 import com.dev.bookingapp.javabookingapp.entity.User;
 import com.dev.bookingapp.javabookingapp.entity.enums.UserRole;
 import com.dev.bookingapp.javabookingapp.repository.UserRepository;
+import com.dev.bookingapp.javabookingapp.service.EmailVerificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,13 +39,14 @@ public class AdminUserSeeder implements ApplicationRunner {
             return;
         }
 
-        if (userRepository.findByEmail(adminEmail).isPresent()) {
+        String normalizedEmail = EmailVerificationService.normalizeEmail(adminEmail);
+        if (userRepository.findByEmailIgnoreCase(normalizedEmail).isPresent()) {
             return;
         }
 
         User admin = User.builder()
                 .business(null)
-                .email(adminEmail)
+                .email(normalizedEmail)
                 .passwordHash(passwordEncoder.encode(adminPassword))
                 .firstName("Platform")
                 .lastName("Admin")
@@ -55,6 +57,6 @@ public class AdminUserSeeder implements ApplicationRunner {
                 .build();
 
         userRepository.save(admin);
-        log.info("Seeded platform admin account for {}", adminEmail);
+        log.info("Seeded platform admin account for {}", normalizedEmail);
     }
 }

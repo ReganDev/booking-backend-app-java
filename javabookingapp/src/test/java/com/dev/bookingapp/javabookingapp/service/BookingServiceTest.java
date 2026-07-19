@@ -8,9 +8,12 @@ import com.dev.bookingapp.javabookingapp.dto.response.CustomerResponse;
 import com.dev.bookingapp.javabookingapp.entity.Booking;
 import com.dev.bookingapp.javabookingapp.entity.Business;
 import com.dev.bookingapp.javabookingapp.entity.Customer;
+import com.dev.bookingapp.javabookingapp.entity.User;
 import com.dev.bookingapp.javabookingapp.entity.enums.BookingStatus;
+import com.dev.bookingapp.javabookingapp.entity.enums.UserRole;
 import com.dev.bookingapp.javabookingapp.exception.BadRequestException;
 import com.dev.bookingapp.javabookingapp.exception.ConflictException;
+import com.dev.bookingapp.javabookingapp.exception.ForbiddenException;
 import com.dev.bookingapp.javabookingapp.mapper.BookingMapper;
 import com.dev.bookingapp.javabookingapp.repository.BookingRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +61,7 @@ class BookingServiceTest {
     private Business business;
     private com.dev.bookingapp.javabookingapp.entity.Service service;
     private Customer customer;
+    private User customerAccount;
     private OffsetDateTime start;
 
     @BeforeEach
@@ -88,10 +92,21 @@ class BookingServiceTest {
                 .lastName("Doe")
                 .build();
 
+        customerAccount = User.builder()
+                .id(UUID.randomUUID())
+                .email(customer.getEmail())
+                .firstName(customer.getFirstName())
+                .lastName(customer.getLastName())
+                .role(UserRole.CUSTOMER)
+                .isActive(true)
+                .emailVerified(true)
+                .build();
+
         start = OffsetDateTime.now().plusDays(1).withNano(0);
     }
 
     private PublicBookingRequest publicRequest() {
+        when(userService.getEntityById(customerAccount.getId())).thenReturn(customerAccount);
         CustomerRequest customerRequest = new CustomerRequest();
         customerRequest.setEmail(customer.getEmail());
         customerRequest.setFirstName(customer.getFirstName());
@@ -109,10 +124,24 @@ class BookingServiceTest {
         business.setIsActive(false);
         when(businessService.getEntityById(business.getId())).thenReturn(business);
 
-        assertThatThrownBy(() -> bookingService.createPublicBooking(business.getId(), publicRequest()))
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId()))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("not currently accepting");
         verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void publicBookingRejectsUnverifiedCustomerIdentity() {
+        customerAccount.setEmailVerified(false);
+        PublicBookingRequest request = publicRequest();
+
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), request, customerAccount.getId()))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("verified customer");
+        verify(businessService, never()).getEntityById(any());
+        verify(customerService, never()).getOrCreateFromUser(any(), any());
     }
 
     @Test
@@ -121,7 +150,8 @@ class BookingServiceTest {
         when(businessService.getEntityById(business.getId())).thenReturn(business);
         when(serviceService.getEntityById(service.getId())).thenReturn(service);
 
-        assertThatThrownBy(() -> bookingService.createPublicBooking(business.getId(), publicRequest()))
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId()))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("does not belong");
         verify(bookingRepository, never()).save(any());
@@ -133,7 +163,8 @@ class BookingServiceTest {
         when(businessService.getEntityById(business.getId())).thenReturn(business);
         when(serviceService.getEntityById(service.getId())).thenReturn(service);
 
-        assertThatThrownBy(() -> bookingService.createPublicBooking(business.getId(), publicRequest()))
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId()))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("not available");
         verify(bookingRepository, never()).save(any());
@@ -146,9 +177,10 @@ class BookingServiceTest {
         doThrow(new ConflictException("This time slot is not available. Please choose another time."))
                 .when(availabilityService).ensureSlotAvailable(business, service, start);
 
-        assertThatThrownBy(() -> bookingService.createPublicBooking(business.getId(), publicRequest()))
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId()))
                 .isInstanceOf(ConflictException.class);
-        verify(customerService, never()).getOrCreate(any(), any());
+        verify(customerService, never()).getOrCreateFromUser(any(), any());
         verify(bookingRepository, never()).save(any());
     }
 
@@ -156,7 +188,7 @@ class BookingServiceTest {
     void publicBookingHappyPathCreatesPendingBookingWithServicePrice() {
         when(businessService.getEntityById(business.getId())).thenReturn(business);
         when(serviceService.getEntityById(service.getId())).thenReturn(service);
-        when(customerService.getOrCreate(any(), any())).thenReturn(
+        when(customerService.getOrCreateFromUser(any(), any())).thenReturn(
                 CustomerResponse.builder().id(customer.getId()).build());
         when(customerService.getEntityById(customer.getId())).thenReturn(customer);
         when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
@@ -166,9 +198,11 @@ class BookingServiceTest {
         when(bookingMapper.toResponse(any(Booking.class)))
                 .thenReturn(BookingResponse.builder().build());
 
-        bookingService.createPublicBooking(business.getId(), publicRequest());
+        bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId());
 
         verify(availabilityService).ensureSlotAvailable(business, service, start);
+        verify(customerService).getOrCreateFromUser(business.getId(), customerAccount);
 
         ArgumentCaptor<Booking> captor = ArgumentCaptor.forClass(Booking.class);
         verify(bookingRepository).save(captor.capture());

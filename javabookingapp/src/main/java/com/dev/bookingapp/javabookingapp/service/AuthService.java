@@ -13,6 +13,7 @@ import com.dev.bookingapp.javabookingapp.entity.User;
 import com.dev.bookingapp.javabookingapp.entity.enums.UserRole;
 import com.dev.bookingapp.javabookingapp.exception.BadRequestException;
 import com.dev.bookingapp.javabookingapp.exception.ConflictException;
+import com.dev.bookingapp.javabookingapp.exception.EmailNotVerifiedException;
 import com.dev.bookingapp.javabookingapp.exception.UnauthorizedException;
 import com.dev.bookingapp.javabookingapp.mapper.BusinessMapper;
 import com.dev.bookingapp.javabookingapp.mapper.UserMapper;
@@ -21,8 +22,6 @@ import com.dev.bookingapp.javabookingapp.repository.RefreshTokenRepository;
 import com.dev.bookingapp.javabookingapp.repository.UserRepository;
 import com.dev.bookingapp.javabookingapp.security.JwtService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,25 +44,25 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final AuthenticationManager authenticationManager;
     private final UserMapper userMapper;
     private final BusinessMapper businessMapper;
+    private final EmailVerificationService emailVerificationService;
 
     private static final Pattern NONLATIN = Pattern.compile("[^\\w-]");
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        User user = createBusinessWithOwner(request);
-        return generateAuthResponse(user);
+    public void register(RegisterRequest request) {
+        createBusinessWithOwner(request);
     }
 
     /** Creates a business and its owner account. Shared by self-registration
      *  and the admin console. */
     @Transactional
     public User createBusinessWithOwner(RegisterRequest request) {
+        String email = EmailVerificationService.normalizeEmail(request.getEmail());
         // Check if email already exists
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ConflictException("Email is already registered");
         }
 
@@ -72,7 +71,7 @@ public class AuthService {
         Business business = Business.builder()
                 .name(request.getBusinessName())
                 .slug(slug)
-                .email(request.getEmail())
+                .email(email)
                 .timezone(request.getTimezone() != null ? request.getTimezone() : "Europe/London")
                 .currency(request.getCurrency() != null ? request.getCurrency() : "GBP")
                 .isActive(true)
@@ -83,7 +82,7 @@ public class AuthService {
         // Create owner user
         User user = User.builder()
                 .business(business)
-                .email(request.getEmail())
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -94,18 +93,21 @@ public class AuthService {
                 .acceptsBookings(true)
                 .build();
 
-        return userRepository.save(user);
+        user = userRepository.save(user);
+        emailVerificationService.issueFor(user);
+        return user;
     }
 
     @Transactional
-    public AuthResponse registerCustomer(CustomerRegisterRequest request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+    public void registerCustomer(CustomerRegisterRequest request) {
+        String email = EmailVerificationService.normalizeEmail(request.getEmail());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ConflictException("Email is already registered");
         }
 
         User user = User.builder()
                 .business(null)
-                .email(request.getEmail())
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -117,21 +119,25 @@ public class AuthService {
                 .build();
 
         user = userRepository.save(user);
-
-        return generateAuthResponse(user);
+        emailVerificationService.issueFor(user);
     }
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
-
-        User user = userRepository.findByEmail(request.getEmail())
+        String email = EmailVerificationService.normalizeEmail(request.getEmail());
+        User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new UnauthorizedException("Invalid email or password");
+        }
 
         if (!user.getIsActive()) {
             throw new UnauthorizedException("Account is deactivated");
+        }
+        if (EmailVerificationService.requiresVerification(user)
+                && !Boolean.TRUE.equals(user.getEmailVerified())) {
+            refreshTokenRepository.revokeAllByUserId(user.getId(), OffsetDateTime.now());
+            throw new EmailNotVerifiedException();
         }
 
         // Update last login
@@ -143,6 +149,9 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refreshToken(RefreshTokenRequest request) {
+        if (!jwtService.validateRefreshToken(request.getRefreshToken())) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
         String tokenHash = hashToken(request.getRefreshToken());
 
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash)
@@ -153,6 +162,12 @@ public class AuthService {
         }
 
         User user = storedToken.getUser();
+        if (!Boolean.TRUE.equals(user.getIsActive())
+                || (EmailVerificationService.requiresVerification(user)
+                    && !Boolean.TRUE.equals(user.getEmailVerified()))) {
+            refreshTokenRepository.revokeAllByUserId(user.getId(), OffsetDateTime.now());
+            throw new UnauthorizedException("Account is not eligible for token refresh");
+        }
 
         // Revoke old token
         storedToken.setRevokedAt(OffsetDateTime.now());

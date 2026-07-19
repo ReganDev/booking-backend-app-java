@@ -16,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.dev.bookingapp.javabookingapp.security.UserPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -72,10 +75,13 @@ public class PublicController {
     }
 
     @PostMapping("/businesses/{businessId}/bookings")
+    @PreAuthorize("hasRole('CUSTOMER') and principal.emailVerified == true")
     public ResponseEntity<BookingResponse> createBooking(
             @PathVariable UUID businessId,
+            @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody PublicBookingRequest request) {
-        BookingResponse created = bookingService.createPublicBooking(businessId, request);
+        BookingResponse created = bookingService.createPublicBooking(
+                businessId, request, principal.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 }

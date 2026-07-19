@@ -4,6 +4,7 @@ import com.dev.bookingapp.javabookingapp.dto.request.CustomerRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.CustomerResponse;
 import com.dev.bookingapp.javabookingapp.entity.Business;
 import com.dev.bookingapp.javabookingapp.entity.Customer;
+import com.dev.bookingapp.javabookingapp.entity.User;
 import com.dev.bookingapp.javabookingapp.exception.ConflictException;
 import com.dev.bookingapp.javabookingapp.exception.ResourceNotFoundException;
 import com.dev.bookingapp.javabookingapp.mapper.CustomerMapper;
@@ -69,6 +70,28 @@ public class CustomerService {
         return customerRepository.findByBusinessIdAndEmail(businessId, request.getEmail())
                 .map(customerMapper::toResponse)
                 .orElseGet(() -> create(businessId, request));
+    }
+
+    @Transactional
+    public CustomerResponse getOrCreateFromUser(UUID businessId, User user) {
+        return customerRepository.findByBusinessIdAndEmailIgnoreCase(businessId, user.getEmail())
+                .map(customer -> {
+                    // The verified account is authoritative, including when a
+                    // legacy guest contact already exists for this email.
+                    customer.setEmail(EmailVerificationService.normalizeEmail(user.getEmail()));
+                    customer.setFirstName(user.getFirstName());
+                    customer.setLastName(user.getLastName());
+                    customer.setPhone(user.getPhone());
+                    return customerMapper.toResponse(customerRepository.save(customer));
+                })
+                .orElseGet(() -> {
+                    CustomerRequest request = new CustomerRequest();
+                    request.setEmail(EmailVerificationService.normalizeEmail(user.getEmail()));
+                    request.setFirstName(user.getFirstName());
+                    request.setLastName(user.getLastName());
+                    request.setPhone(user.getPhone());
+                    return create(businessId, request);
+                });
     }
 
     @Transactional
