@@ -11,8 +11,10 @@ import java.io.IOException;
 import java.util.UUID;
 import java.util.zip.CRC32;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SupabaseStorageServiceTest {
 
@@ -75,6 +77,16 @@ class SupabaseStorageServiceTest {
                 "Photos can be up to 4032px on either edge and 12.2 megapixels",
                 error.getMessage()
         );
+    }
+
+    @Test
+    void distinguishesLegacyJwtAndNewSecretKeys() {
+        assertTrue(SupabaseStorageService.isLegacyJwtKey(
+                "eyJhbGciOiJIUzI1NiJ9.payload.signature"
+        ));
+        assertFalse(SupabaseStorageService.isLegacyJwtKey(
+                "sb_secret_example"
+        ));
     }
 
     private byte[] pngHeader(int width, int height) throws IOException {

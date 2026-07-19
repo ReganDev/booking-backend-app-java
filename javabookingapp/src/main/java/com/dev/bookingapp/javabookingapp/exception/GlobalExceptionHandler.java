@@ -101,11 +101,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PhotoStorageException.class)
     public ResponseEntity<ErrorResponse> handlePhotoStorage(PhotoStorageException ex) {
+        log.error("Business photo storage operation failed", ex);
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(OffsetDateTime.now())
                 .status(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .error("Photo Storage Unavailable")
-                .message(ex.getMessage())
+                .error("Service Unavailable")
+                .code("PHOTO_STORAGE_UNAVAILABLE")
+                .message("We couldn't update your photos right now. Please try again in a few minutes.")
                 .build();
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
     }

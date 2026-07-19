@@ -61,10 +61,8 @@ public class SupabaseStorageService {
         String contentType = file.getContentType();
         String objectPath = businessId + "/" + UUID.randomUUID() + "." + EXTENSIONS.get(contentType);
 
-        HttpRequest request = HttpRequest.newBuilder(objectUri(objectPath))
+        HttpRequest request = authenticatedRequest(objectUri(objectPath))
                 .timeout(Duration.ofSeconds(30))
-                .header("Authorization", "Bearer " + serviceRoleKey)
-                .header("apikey", serviceRoleKey)
                 .header("Content-Type", contentType)
                 .header("x-upsert", "false")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(bytes))
@@ -85,10 +83,8 @@ public class SupabaseStorageService {
 
         validateConfigured();
         String objectPath = businessId + "/" + photoUrl.substring(expectedPrefix.length());
-        HttpRequest request = HttpRequest.newBuilder(objectUri(objectPath))
+        HttpRequest request = authenticatedRequest(objectUri(objectPath))
                 .timeout(Duration.ofSeconds(20))
-                .header("Authorization", "Bearer " + serviceRoleKey)
-                .header("apikey", serviceRoleKey)
                 .DELETE()
                 .build();
 
@@ -249,6 +245,23 @@ public class SupabaseStorageService {
 
     private URI objectUri(String objectPath) {
         return URI.create(supabaseUrl + "/storage/v1/object/" + encode(bucket) + "/" + encodePath(objectPath));
+    }
+
+    private HttpRequest.Builder authenticatedRequest(URI uri) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .header("apikey", serviceRoleKey);
+
+        // Legacy service_role keys are JWTs and belong in both headers. New
+        // sb_secret_ keys are opaque API keys and must not be sent as Bearer
+        // tokens because Supabase will attempt to parse them as JWTs.
+        if (isLegacyJwtKey(serviceRoleKey)) {
+            builder.header("Authorization", "Bearer " + serviceRoleKey);
+        }
+        return builder;
+    }
+
+    static boolean isLegacyJwtKey(String key) {
+        return key != null && key.split("\\.", -1).length == 3;
     }
 
     private String publicUrl(String objectPath) {
