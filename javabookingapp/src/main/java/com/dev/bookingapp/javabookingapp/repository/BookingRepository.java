@@ -32,6 +32,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     List<Booking> findByCustomerId(UUID customerId);
 
+    boolean existsByServiceId(UUID serviceId);
+
     @Query("SELECT b FROM Booking b WHERE b.business.id = :businessId " +
            "AND b.startDatetime >= :start AND b.endDatetime <= :end " +
            "AND b.status NOT IN ('CANCELLED')")

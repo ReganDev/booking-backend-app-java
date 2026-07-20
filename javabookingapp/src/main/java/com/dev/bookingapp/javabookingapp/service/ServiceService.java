@@ -6,6 +6,7 @@ import com.dev.bookingapp.javabookingapp.entity.Business;
 import com.dev.bookingapp.javabookingapp.exception.ConflictException;
 import com.dev.bookingapp.javabookingapp.exception.ResourceNotFoundException;
 import com.dev.bookingapp.javabookingapp.mapper.ServiceMapper;
+import com.dev.bookingapp.javabookingapp.repository.BookingRepository;
 import com.dev.bookingapp.javabookingapp.repository.ServiceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ public class ServiceService {
     private final ServiceRepository serviceRepository;
     private final ServiceMapper serviceMapper;
     private final BusinessService businessService;
+    private final BookingRepository bookingRepository;
 
     @Transactional(readOnly = true)
     public ServiceResponse getById(UUID businessId, UUID serviceId) {
@@ -91,6 +93,15 @@ public class ServiceService {
         com.dev.bookingapp.javabookingapp.entity.Service service = serviceRepository.findById(serviceId)
                 .filter(s -> s.getBusiness().getId().equals(businessId))
                 .orElseThrow(() -> new ResourceNotFoundException("Service", "id", serviceId));
+
+        // Bookings reference services with ON DELETE RESTRICT, so a service
+        // that has ever been booked can't be hard-deleted without breaking
+        // that history — deactivating it is the only option in that case.
+        if (bookingRepository.existsByServiceId(serviceId)) {
+            throw new ConflictException(
+                    "This service has existing bookings and can't be deleted. "
+                            + "Deactivate it instead so it stops accepting new bookings.");
+        }
 
         serviceRepository.delete(service);
     }
