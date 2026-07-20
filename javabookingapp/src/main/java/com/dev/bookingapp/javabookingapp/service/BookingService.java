@@ -159,6 +159,12 @@ public class BookingService {
             }
         }
 
+        // The reminder flags are optional on the request but NOT NULL in the
+        // database; MapStruct passes nulls straight through to the builder,
+        // which bypasses the entity's @Builder.Default.
+        request.setEmailReminder(Boolean.TRUE.equals(request.getEmailReminder()));
+        request.setSmsReminder(Boolean.TRUE.equals(request.getSmsReminder()));
+
         Booking booking = bookingMapper.toEntity(request);
         booking.setBusiness(business);
         booking.setCustomer(customer);
