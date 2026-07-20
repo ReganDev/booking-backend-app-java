@@ -39,6 +39,19 @@ class TenantAccessInterceptorTest {
                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
     }
 
+    private void authenticateAsAdmin() {
+        UserPrincipal principal = UserPrincipal.builder()
+                .id(UUID.randomUUID())
+                .businessId(null)
+                .email("admin@example.com")
+                .role("ADMIN")
+                .isActive(true)
+                .authorities(List.of())
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+    }
+
     private MockHttpServletRequest requestFor(String businessId) {
         MockHttpServletRequest request = new MockHttpServletRequest("GET",
                 "/api/v1/businesses/" + businessId + "/bookings");
@@ -75,6 +88,16 @@ class TenantAccessInterceptorTest {
 
         assertThat(allowed).isFalse();
         assertThat(response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void allowsAdminAccessToAnyBusiness() throws Exception {
+        authenticateAsAdmin();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        boolean allowed = interceptor.preHandle(requestFor(UUID.randomUUID().toString()), response, new Object());
+
+        assertThat(allowed).isTrue();
     }
 
     @Test

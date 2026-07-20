@@ -40,6 +40,11 @@ public class TenantAccessInterceptor implements HandlerInterceptor {
         if (businessId == null) {
             return true;
         }
+        // The platform admin has no business of its own but manages every
+        // tenant's data from the admin console.
+        if ("ADMIN".equals(principal.getRole())) {
+            return true;
+        }
         // Customer accounts have no business, so they can never reach
         // business-scoped management endpoints.
         if (principal.getBusinessId() != null
