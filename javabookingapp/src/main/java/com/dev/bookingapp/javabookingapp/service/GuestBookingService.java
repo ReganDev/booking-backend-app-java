@@ -1,6 +1,8 @@
 package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingStartRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
+import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.GuestBookingStartResponse;
 import com.dev.bookingapp.javabookingapp.entity.BookingOtpSession;
 import com.dev.bookingapp.javabookingapp.entity.Business;
@@ -17,10 +19,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.UUID;
 
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
@@ -28,6 +33,7 @@ import java.util.Base64;
 public class GuestBookingService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    static final int MAX_ATTEMPTS = 5;
 
     private final BookingOtpSessionRepository sessionRepository;
     private final UserRepository userRepository;
@@ -145,5 +151,78 @@ public class GuestBookingService {
             throw new EmailDeliveryException(
                     "We could not send your code. Please try again.", ex);
         }
+    }
+
+    @Transactional
+    public BookingResponse verify(UUID bookingSessionId, String code) {
+        BookingOtpSession session = sessionRepository.findById(bookingSessionId)
+                .orElseThrow(this::invalidCode);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        if (!session.isUsableAt(now) || session.getAttempts() >= MAX_ATTEMPTS) {
+            throw invalidCode();
+        }
+
+        boolean matches = MessageDigest.isEqual(
+                session.getCodeHash().getBytes(StandardCharsets.UTF_8),
+                EmailVerificationService.hash(code).getBytes(StandardCharsets.UTF_8));
+        if (!matches) {
+            session.setAttempts(session.getAttempts() + 1);
+            sessionRepository.save(session);
+            throw new BadRequestException("Incorrect code. Please try again.");
+        }
+
+        session.setConsumedAt(now);
+        sessionRepository.save(session);
+
+        // The code proves ownership of the email address
+        User user = session.getUser();
+        user.setEmailVerified(true);
+        userRepository.save(user);
+
+        PublicBookingRequest bookingRequest = new PublicBookingRequest();
+        bookingRequest.setServiceId(session.getService().getId());
+        bookingRequest.setStartDatetime(session.getStartDatetime());
+        bookingRequest.setCustomerNotes(session.getCustomerNotes());
+        bookingRequest.setEmailReminder(session.getEmailReminder());
+        bookingRequest.setSmsReminder(session.getSmsReminder());
+
+        // Re-validates the slot and sends the booking-details email
+        BookingResponse created = bookingService.createPublicBooking(
+                session.getBusiness().getId(), bookingRequest, user.getId());
+
+        if (Boolean.TRUE.equals(session.getNewAccount())) {
+            // Best-effort: issueClaimLink never throws on email failure
+            passwordResetService.issueClaimLink(user);
+        }
+        return created;
+    }
+
+    @Transactional
+    public void resend(UUID bookingSessionId) {
+        sessionRepository.findById(bookingSessionId).ifPresent(session -> {
+            OffsetDateTime now = OffsetDateTime.now();
+            if (!session.isUsableAt(now) || session.getAttempts() >= MAX_ATTEMPTS) {
+                return;
+            }
+            if (session.getLastSentAt() != null
+                    && session.getLastSentAt().isAfter(now.minus(resendInterval))) {
+                return;
+            }
+            String code = generateCode();
+            session.setCodeHash(EmailVerificationService.hash(code));
+            session.setLastSentAt(now);
+            sessionRepository.save(session);
+            try {
+                sendCode(session.getUser(), code);
+            } catch (RuntimeException ex) {
+                // The public resend response stays generic
+                log.error("Could not resend booking code for session {}", session.getId(), ex);
+            }
+        });
+    }
+
+    private BadRequestException invalidCode() {
+        return new BadRequestException("This code is invalid or has expired. Request a new one.");
     }
 }

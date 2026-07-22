@@ -1,6 +1,8 @@
 package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingStartRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
+import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.GuestBookingStartResponse;
 import com.dev.bookingapp.javabookingapp.entity.BookingOtpSession;
 import com.dev.bookingapp.javabookingapp.entity.Business;
@@ -192,6 +194,132 @@ class GuestBookingServiceTest {
         assertThatThrownBy(() -> service.start(startRequest))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("wait");
+        verify(emailSender, never()).send(any(), any(), any(), any(), any());
+    }
+
+    // --- verify ---
+
+    private BookingOtpSession usableSession(User user, String code) {
+        BookingOtpSession session = BookingOtpSession.builder()
+                .id(UUID.randomUUID())
+                .user(user)
+                .business(business)
+                .service(bookableService)
+                .startDatetime(startRequest.getStartDatetime())
+                .emailReminder(true)
+                .smsReminder(false)
+                .newAccount(true)
+                .codeHash(EmailVerificationService.hash(code))
+                .attempts(0)
+                .lastSentAt(OffsetDateTime.now())
+                .expiresAt(OffsetDateTime.now().plusMinutes(10))
+                .build();
+        lenient().when(sessionRepository.findById(session.getId()))
+                .thenReturn(Optional.of(session));
+        return session;
+    }
+
+    private User guestUser() {
+        return User.builder()
+                .id(UUID.randomUUID())
+                .email("gwen@example.com")
+                .firstName("Gwen").lastName("Guest")
+                .passwordHash("$hash")
+                .role(UserRole.CUSTOMER)
+                .isActive(true)
+                .emailVerified(false)
+                .build();
+    }
+
+    @Test
+    void verifyMarksUserVerifiedCreatesBookingAndSendsClaimLink() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        BookingResponse booking = BookingResponse.builder().build();
+        when(bookingService.createPublicBooking(
+                eq(business.getId()), any(PublicBookingRequest.class), eq(user.getId())))
+                .thenReturn(booking);
+
+        BookingResponse result = service.verify(session.getId(), "123456");
+
+        assertThat(result).isSameAs(booking);
+        assertThat(user.getEmailVerified()).isTrue();
+        assertThat(session.getConsumedAt()).isNotNull();
+        verify(passwordResetService).issueClaimLink(user);
+    }
+
+    @Test
+    void verifyDoesNotSendClaimLinkForExistingAccounts() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        session.setNewAccount(false);
+        when(bookingService.createPublicBooking(any(), any(), any()))
+                .thenReturn(BookingResponse.builder().build());
+
+        service.verify(session.getId(), "123456");
+
+        verify(passwordResetService, never()).issueClaimLink(any());
+    }
+
+    @Test
+    void verifyWrongCodeIncrementsAttemptsAndRejects() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+
+        assertThatThrownBy(() -> service.verify(session.getId(), "654321"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Incorrect code");
+        assertThat(session.getAttempts()).isEqualTo(1);
+        verify(bookingService, never()).createPublicBooking(any(), any(), any());
+    }
+
+    @Test
+    void verifyRejectsAfterMaxAttempts() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        session.setAttempts(5);
+
+        assertThatThrownBy(() -> service.verify(session.getId(), "123456"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("expired");
+        verify(bookingService, never()).createPublicBooking(any(), any(), any());
+    }
+
+    @Test
+    void verifyRejectsExpiredSessions() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        session.setExpiresAt(OffsetDateTime.now().minusMinutes(1));
+
+        assertThatThrownBy(() -> service.verify(session.getId(), "123456"))
+                .isInstanceOf(BadRequestException.class);
+        verify(bookingService, never()).createPublicBooking(any(), any(), any());
+    }
+
+    // --- resend ---
+
+    @Test
+    void resendGeneratesNewCodeAfterInterval() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        session.setLastSentAt(OffsetDateTime.now().minusMinutes(2));
+        String oldHash = session.getCodeHash();
+
+        service.resend(session.getId());
+
+        assertThat(session.getCodeHash()).isNotEqualTo(oldHash);
+        verify(emailSender).send(eq("BookingBase"), eq(user.getEmail()),
+                isNull(), any(), matches("(?s).*\\b\\d{6}\\b.*"));
+    }
+
+    @Test
+    void resendIsSilentlyRateLimitedWithinInterval() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        session.setLastSentAt(OffsetDateTime.now());
+
+        service.resend(session.getId());
+
         verify(emailSender, never()).send(any(), any(), any(), any(), any());
     }
 }
