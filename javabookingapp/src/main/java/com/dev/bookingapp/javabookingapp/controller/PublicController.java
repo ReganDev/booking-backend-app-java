@@ -1,15 +1,20 @@
 package com.dev.bookingapp.javabookingapp.controller;
 
 import com.dev.bookingapp.javabookingapp.dto.request.EnquiryRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingResendRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingStartRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingVerifyRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.BusinessResponse;
+import com.dev.bookingapp.javabookingapp.dto.response.GuestBookingStartResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.ServiceResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.TimeSlotResponse;
 import com.dev.bookingapp.javabookingapp.service.AvailabilityService;
 import com.dev.bookingapp.javabookingapp.service.BookingService;
 import com.dev.bookingapp.javabookingapp.service.BusinessService;
 import com.dev.bookingapp.javabookingapp.service.EnquiryService;
+import com.dev.bookingapp.javabookingapp.service.GuestBookingService;
 import com.dev.bookingapp.javabookingapp.service.ServiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +41,7 @@ public class PublicController {
     private final BookingService bookingService;
     private final AvailabilityService availabilityService;
     private final EnquiryService enquiryService;
+    private final GuestBookingService guestBookingService;
 
     @PostMapping("/enquiry")
     public ResponseEntity<Void> submitEnquiry(@Valid @RequestBody EnquiryRequest request) {
@@ -83,5 +89,26 @@ public class PublicController {
         BookingResponse created = bookingService.createPublicBooking(
                 businessId, request, principal.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PostMapping("/bookings/start")
+    public ResponseEntity<GuestBookingStartResponse> startGuestBooking(
+            @Valid @RequestBody GuestBookingStartRequest request) {
+        return ResponseEntity.ok(guestBookingService.start(request));
+    }
+
+    @PostMapping("/bookings/verify")
+    public ResponseEntity<BookingResponse> verifyGuestBooking(
+            @Valid @RequestBody GuestBookingVerifyRequest request) {
+        BookingResponse created = guestBookingService.verify(
+                request.getBookingSessionId(), request.getCode());
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PostMapping("/bookings/resend")
+    public ResponseEntity<Void> resendGuestBookingCode(
+            @Valid @RequestBody GuestBookingResendRequest request) {
+        guestBookingService.resend(request.getBookingSessionId());
+        return ResponseEntity.noContent().build();
     }
 }
