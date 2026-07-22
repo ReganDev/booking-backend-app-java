@@ -34,6 +34,9 @@ public class PasswordResetService {
     @Value("${app.password-reset.expiry:1h}")
     private Duration expiry;
 
+    @Value("${app.password-reset.claim-expiry:24h}")
+    private Duration claimExpiry;
+
     @Value("${app.password-reset.resend-interval:60s}")
     private Duration resendInterval;
 
@@ -81,6 +84,48 @@ public class PasswordResetService {
                 log.error("Could not send password reset email for user {}", user.getId(), ex);
             }
         });
+    }
+
+    /** Sends a "set a password" link after a guest OTP booking. Best-effort:
+     *  the booking must never fail because this email could not be sent. */
+    @Transactional
+    public void issueClaimLink(User user) {
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        tokenRepository.revokeActiveByUserId(user.getId(), now);
+
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+
+        tokenRepository.save(PasswordResetToken.builder()
+                .user(user)
+                .tokenHash(EmailVerificationService.hash(rawToken))
+                .expiresAt(now.plus(claimExpiry))
+                .build());
+
+        if (!emailSender.isConfigured()) {
+            log.error("Claim-account email delivery is not configured");
+            return;
+        }
+        String baseUrl = frontendUrl.replaceAll("/+$", "");
+        String link = baseUrl + "/reset-password?token=" + rawToken;
+        try {
+            emailSender.send(
+                    "BookingBase",
+                    user.getEmail(),
+                    null,
+                    "Manage your bookings on BookingBase",
+                    "Hello " + user.getFirstName() + ",\n\nYour booking is confirmed."
+                            + " Set a password to view and manage your bookings any time:\n"
+                            + link + "\n\nThis link expires in " + claimExpiry.toHours()
+                            + " hours. If you did not book with us, you can ignore this email.");
+        } catch (RuntimeException ex) {
+            log.error("Could not send claim-account email for user {}", user.getId(), ex);
+        }
     }
 
     @Transactional
