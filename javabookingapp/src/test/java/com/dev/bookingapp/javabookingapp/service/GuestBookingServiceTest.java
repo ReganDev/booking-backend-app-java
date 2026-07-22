@@ -44,6 +44,7 @@ class GuestBookingServiceTest {
     @Mock PasswordResetService passwordResetService;
     @Mock ResendEmailSender emailSender;
     @Mock PasswordEncoder passwordEncoder;
+    @Mock BookingOtpAttemptRecorder attemptRecorder;
     @InjectMocks GuestBookingService service;
 
     private Business business;
@@ -269,7 +270,7 @@ class GuestBookingServiceTest {
         assertThatThrownBy(() -> service.verify(session.getId(), "654321"))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Incorrect code");
-        assertThat(session.getAttempts()).isEqualTo(1);
+        verify(attemptRecorder).recordFailedAttempt(session.getId());
         verify(bookingService, never()).createPublicBooking(any(), any(), any());
     }
 

@@ -44,6 +44,7 @@ public class GuestBookingService {
     private final PasswordResetService passwordResetService;
     private final ResendEmailSender emailSender;
     private final PasswordEncoder passwordEncoder;
+    private final BookingOtpAttemptRecorder attemptRecorder;
 
     @Value("${app.booking-otp.expiry:10m}")
     private Duration expiry;
@@ -167,8 +168,7 @@ public class GuestBookingService {
                 session.getCodeHash().getBytes(StandardCharsets.UTF_8),
                 EmailVerificationService.hash(code).getBytes(StandardCharsets.UTF_8));
         if (!matches) {
-            session.setAttempts(session.getAttempts() + 1);
-            sessionRepository.save(session);
+            attemptRecorder.recordFailedAttempt(session.getId());
             throw new BadRequestException("Incorrect code. Please try again.");
         }
 
