@@ -54,8 +54,9 @@ CREATE TABLE booking_otp_sessions (
     -- True when this flow created the user; drives the claim-account email
     new_account BOOLEAN NOT NULL DEFAULT FALSE,
 
-    -- OTP state
-    code_hash CHAR(64) NOT NULL,
+    -- OTP state (VARCHAR, not CHAR: Hibernate validates String fields as
+    -- VARCHAR — see V7, which exists to fix exactly this on V6's CHAR column)
+    code_hash VARCHAR(64) NOT NULL,
     attempts INT NOT NULL DEFAULT 0,
     last_sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
