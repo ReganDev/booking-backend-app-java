@@ -32,6 +32,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     List<Booking> findByCustomerId(UUID customerId);
 
+    @Query("SELECT b FROM Booking b WHERE LOWER(b.customer.email) = LOWER(:email) " +
+           "ORDER BY b.startDatetime DESC")
+    List<Booking> findByCustomerEmail(@Param("email") String email);
+
     boolean existsByServiceId(UUID serviceId);
 
     @Query("SELECT b FROM Booking b WHERE b.business.id = :businessId " +

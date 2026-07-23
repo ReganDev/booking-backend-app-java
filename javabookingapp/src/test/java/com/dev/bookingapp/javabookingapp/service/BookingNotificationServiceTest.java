@@ -52,6 +52,7 @@ class BookingNotificationServiceTest {
                 .price(new BigDecimal("32.50"))
                 .customer(BookingResponse.CustomerInfo.builder()
                         .firstName("Jane")
+                        .lastName("Doe")
                         .email("jane@example.com")
                         .build())
                 .service(BookingResponse.ServiceInfo.builder()
@@ -91,5 +92,40 @@ class BookingNotificationServiceTest {
         assertThat(text).contains("booking request");
         assertThat(text).contains("awaiting confirmation");
         assertThat(text).doesNotContain("your booking is confirmed");
+    }
+
+    @Test
+    void businessCancelNoticeNamesCustomerServiceAndFreedSlot() {
+        notificationService.sendBusinessCancelledNotice(
+                business, booking(BookingStatus.CANCELLED));
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(
+                eq("BookingBase"),
+                eq(business.getEmail()),
+                eq(null),
+                eq("Booking cancelled: Haircut"),
+                textCaptor.capture());
+        assertThat(textCaptor.getValue()).contains("Jane");
+        assertThat(textCaptor.getValue()).contains("has cancelled their booking");
+        assertThat(textCaptor.getValue()).contains("now free for other customers");
+    }
+
+    @Test
+    void businessRescheduleNoticeShowsOldAndNewTimes() {
+        notificationService.sendBusinessRescheduledNotice(
+                business, booking(BookingStatus.CONFIRMED),
+                OffsetDateTime.now().plusDays(2));
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(
+                eq("BookingBase"),
+                eq(business.getEmail()),
+                eq(null),
+                eq("Booking rescheduled: Haircut"),
+                textCaptor.capture());
+        assertThat(textCaptor.getValue()).contains("has moved their booking");
+        assertThat(textCaptor.getValue()).contains("From: ");
+        assertThat(textCaptor.getValue()).contains("To: ");
     }
 }
