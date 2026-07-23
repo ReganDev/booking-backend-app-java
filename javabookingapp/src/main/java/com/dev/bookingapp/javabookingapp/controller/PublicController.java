@@ -1,5 +1,6 @@
 package com.dev.bookingapp.javabookingapp.controller;
 
+import com.dev.bookingapp.javabookingapp.dto.request.BookingRescheduleRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.EnquiryRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingResendRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.GuestBookingStartRequest;
@@ -8,6 +9,7 @@ import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.BusinessResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.GuestBookingStartResponse;
+import com.dev.bookingapp.javabookingapp.dto.response.ManageBookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.ServiceResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.TimeSlotResponse;
 import com.dev.bookingapp.javabookingapp.service.AvailabilityService;
@@ -15,6 +17,7 @@ import com.dev.bookingapp.javabookingapp.service.BookingService;
 import com.dev.bookingapp.javabookingapp.service.BusinessService;
 import com.dev.bookingapp.javabookingapp.service.EnquiryService;
 import com.dev.bookingapp.javabookingapp.service.GuestBookingService;
+import com.dev.bookingapp.javabookingapp.service.ManageBookingService;
 import com.dev.bookingapp.javabookingapp.service.ServiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,7 @@ public class PublicController {
     private final AvailabilityService availabilityService;
     private final EnquiryService enquiryService;
     private final GuestBookingService guestBookingService;
+    private final ManageBookingService manageBookingService;
 
     @PostMapping("/enquiry")
     public ResponseEntity<Void> submitEnquiry(@Valid @RequestBody EnquiryRequest request) {
@@ -110,5 +114,23 @@ public class PublicController {
             @Valid @RequestBody GuestBookingResendRequest request) {
         guestBookingService.resend(request.getBookingSessionId());
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/manage/{token}")
+    public ResponseEntity<ManageBookingResponse> getManagedBooking(@PathVariable String token) {
+        return ResponseEntity.ok(manageBookingService.getByToken(token));
+    }
+
+    @PostMapping("/manage/{token}/cancel")
+    public ResponseEntity<ManageBookingResponse> cancelManagedBooking(@PathVariable String token) {
+        return ResponseEntity.ok(manageBookingService.cancelByToken(token));
+    }
+
+    @PostMapping("/manage/{token}/reschedule")
+    public ResponseEntity<ManageBookingResponse> rescheduleManagedBooking(
+            @PathVariable String token,
+            @Valid @RequestBody BookingRescheduleRequest request) {
+        return ResponseEntity.ok(
+                manageBookingService.rescheduleByToken(token, request.getStartDatetime()));
     }
 }
