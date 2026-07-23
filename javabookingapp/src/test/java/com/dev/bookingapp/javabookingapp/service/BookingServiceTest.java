@@ -185,7 +185,7 @@ class BookingServiceTest {
     }
 
     @Test
-    void publicBookingHappyPathCreatesPendingBookingWithServicePrice() {
+    void publicBookingHappyPathConfirmsBookingWithServicePrice() {
         when(businessService.getEntityById(business.getId())).thenReturn(business);
         when(serviceService.getEntityById(service.getId())).thenReturn(service);
         when(customerService.getOrCreateFromUser(any(), any())).thenReturn(
@@ -208,7 +208,7 @@ class BookingServiceTest {
         verify(bookingRepository).save(captor.capture());
         Booking saved = captor.getValue();
 
-        assertThat(saved.getStatus()).isEqualTo(BookingStatus.PENDING);
+        assertThat(saved.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(saved.getPrice()).isEqualByComparingTo("32.50");
         assertThat(saved.getStaff()).isNull();
         assertThat(saved.getEndDatetime()).isEqualTo(start.plusMinutes(45));
@@ -247,5 +247,51 @@ class BookingServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("past");
         verify(bookingRepository, never()).save(any());
+    }
+
+    private BookingRequest directRequest() {
+        BookingRequest request = new BookingRequest();
+        request.setCustomerId(customer.getId());
+        request.setServiceId(service.getId());
+        request.setStartDatetime(start);
+        return request;
+    }
+
+    private Booking createAndCaptureSavedBooking() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.create(business.getId(), directRequest());
+
+        ArgumentCaptor<Booking> captor = ArgumentCaptor.forClass(Booking.class);
+        verify(bookingRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void bookingStaysPendingWhenAutoConfirmIsOff() {
+        business.setAutoConfirmBookings(false);
+
+        Booking saved = createAndCaptureSavedBooking();
+
+        assertThat(saved.getStatus()).isEqualTo(BookingStatus.PENDING);
+    }
+
+    @Test
+    void bookingStaysPendingWhenAutoConfirmFlagIsNull() {
+        // Defensive: a null flag (e.g. an entity built without the default)
+        // must fall back to the old request/approve behavior, never confirm.
+        business.setAutoConfirmBookings(null);
+
+        Booking saved = createAndCaptureSavedBooking();
+
+        assertThat(saved.getStatus()).isEqualTo(BookingStatus.PENDING);
     }
 }

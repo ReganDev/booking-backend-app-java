@@ -171,7 +171,11 @@ public class BookingService {
         booking.setService(service);
         booking.setStaff(staff);
         booking.setEndDatetime(endDatetime);
-        booking.setStatus(BookingStatus.PENDING);
+        // Auto-confirm (default ON) books instantly; opted-out businesses
+        // keep the request/approve flow. Null falls back to PENDING.
+        booking.setStatus(Boolean.TRUE.equals(business.getAutoConfirmBookings())
+                ? BookingStatus.CONFIRMED
+                : BookingStatus.PENDING);
         booking.setPrice(service.getPrice());
 
         Booking saved = bookingRepository.save(booking);
