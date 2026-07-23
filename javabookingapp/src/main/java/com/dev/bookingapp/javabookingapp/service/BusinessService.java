@@ -93,6 +93,12 @@ public class BusinessService {
         business.setSlug(slug);
         business.setIsActive(true);
 
+        // MapStruct passes a null request flag straight to the builder, which
+        // bypasses the entity's @Builder.Default; the column is NOT NULL.
+        if (business.getAutoConfirmBookings() == null) {
+            business.setAutoConfirmBookings(true);
+        }
+
         Business saved = businessRepository.save(business);
         return businessMapper.toResponse(saved);
     }
