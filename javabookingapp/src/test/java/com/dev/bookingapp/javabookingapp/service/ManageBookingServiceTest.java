@@ -172,16 +172,18 @@ class ManageBookingServiceTest {
     void rescheduleByTokenValidatesSlotReschedulesAndNotifies() {
         OffsetDateTime newStart = OffsetDateTime.now().plusDays(5);
         OffsetDateTime oldStart = booking.getStartDatetime();
+        BookingResponse updated = BookingResponse.builder().id(UUID.randomUUID()).build();
         when(tokenService.resolve("tok")).thenReturn(booking);
         when(bookingService.reschedule(business.getId(), booking.getId(), newStart))
-                .thenReturn(BookingResponse.builder().build());
-        when(bookingMapper.toResponse(booking)).thenReturn(BookingResponse.builder().build());
+                .thenReturn(updated);
 
-        manageBookingService.rescheduleByToken("tok", newStart);
+        ManageBookingResponse response = manageBookingService.rescheduleByToken("tok", newStart);
 
         verify(availabilityService).ensureSlotAvailable(business, service, newStart);
         verify(bookingService).reschedule(business.getId(), booking.getId(), newStart);
-        verify(notificationService).sendBusinessRescheduledNotice(any(), any(), org.mockito.ArgumentMatchers.eq(oldStart));
+        verify(notificationService).sendBusinessRescheduledNotice(
+                any(), org.mockito.ArgumentMatchers.same(updated), org.mockito.ArgumentMatchers.eq(oldStart));
+        assertThat(response.getBooking()).isSameAs(updated);
     }
 
     @Test

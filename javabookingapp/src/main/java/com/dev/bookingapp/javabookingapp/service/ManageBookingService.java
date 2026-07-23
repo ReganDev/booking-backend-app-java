@@ -1,5 +1,6 @@
 package com.dev.bookingapp.javabookingapp.service;
 
+import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.ManageBookingResponse;
 import com.dev.bookingapp.javabookingapp.entity.Booking;
 import com.dev.bookingapp.javabookingapp.entity.Business;
@@ -109,11 +110,12 @@ public class ManageBookingService {
         // limits, clashes) before the conflict-checked reschedule itself.
         availabilityService.ensureSlotAvailable(
                 booking.getBusiness(), booking.getService(), newStart);
-        bookingService.reschedule(booking.getBusiness().getId(), booking.getId(), newStart);
+        BookingResponse updated = bookingService.reschedule(
+                booking.getBusiness().getId(), booking.getId(), newStart);
 
         notificationService.sendBusinessRescheduledNotice(
-                booking.getBusiness(), bookingMapper.toResponse(booking), oldStart);
-        return toResponse(booking);
+                booking.getBusiness(), updated, oldStart);
+        return toResponse(booking, updated);
     }
 
     private void requireModifiable(Booking booking, OffsetDateTime now) {
@@ -135,10 +137,14 @@ public class ManageBookingService {
     }
 
     private ManageBookingResponse toResponse(Booking booking) {
+        return toResponse(booking, bookingMapper.toResponse(booking));
+    }
+
+    private ManageBookingResponse toResponse(Booking booking, BookingResponse payload) {
         Business business = booking.getBusiness();
         boolean modifiable = canModifyAt(booking, OffsetDateTime.now());
         return ManageBookingResponse.builder()
-                .booking(bookingMapper.toResponse(booking))
+                .booking(payload)
                 .businessName(business.getName())
                 .businessSlug(business.getSlug())
                 .businessEmail(business.getEmail())

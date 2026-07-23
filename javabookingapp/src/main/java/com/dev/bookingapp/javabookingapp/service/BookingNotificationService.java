@@ -75,15 +75,15 @@ public class BookingNotificationService {
             log.warn("Cancel notice requested but RESEND_API_KEY is not configured; skipping");
             return;
         }
-        ZoneId zone = AvailabilityService.resolveZone(business.getTimezone());
-        String when = booking.getStartDatetime().atZoneSameInstant(zone).format(WHEN_FORMAT);
-        String text = "Hi,\n\n"
-                + booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName()
-                + " has cancelled their booking:\n\n"
-                + "Service: " + booking.getService().getName() + "\n"
-                + "When: " + when + "\n\n"
-                + "The slot is now free for other customers.\n";
         try {
+            ZoneId zone = AvailabilityService.resolveZone(business.getTimezone());
+            String when = booking.getStartDatetime().atZoneSameInstant(zone).format(WHEN_FORMAT);
+            String text = "Hi,\n\n"
+                    + booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName()
+                    + " has cancelled their booking:\n\n"
+                    + "Service: " + booking.getService().getName() + "\n"
+                    + "When: " + when + "\n\n"
+                    + "The slot is now free for other customers.\n";
             emailSender.send("BookingBase", business.getEmail(), null,
                     "Booking cancelled: " + booking.getService().getName(), text);
             log.info("Cancel notice sent to business {} for booking {}", business.getId(), booking.getId());
@@ -99,16 +99,16 @@ public class BookingNotificationService {
             log.warn("Reschedule notice requested but RESEND_API_KEY is not configured; skipping");
             return;
         }
-        ZoneId zone = AvailabilityService.resolveZone(business.getTimezone());
-        String from = oldStart.atZoneSameInstant(zone).format(WHEN_FORMAT);
-        String to = booking.getStartDatetime().atZoneSameInstant(zone).format(WHEN_FORMAT);
-        String text = "Hi,\n\n"
-                + booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName()
-                + " has moved their booking:\n\n"
-                + "Service: " + booking.getService().getName() + "\n"
-                + "From: " + from + "\n"
-                + "To: " + to + "\n";
         try {
+            ZoneId zone = AvailabilityService.resolveZone(business.getTimezone());
+            String from = oldStart.atZoneSameInstant(zone).format(WHEN_FORMAT);
+            String to = booking.getStartDatetime().atZoneSameInstant(zone).format(WHEN_FORMAT);
+            String text = "Hi,\n\n"
+                    + booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName()
+                    + " has moved their booking:\n\n"
+                    + "Service: " + booking.getService().getName() + "\n"
+                    + "From: " + from + "\n"
+                    + "To: " + to + "\n";
             emailSender.send("BookingBase", business.getEmail(), null,
                     "Booking rescheduled: " + booking.getService().getName(), text);
             log.info("Reschedule notice sent to business {} for booking {}", business.getId(), booking.getId());

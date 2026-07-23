@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -127,5 +128,21 @@ class BookingNotificationServiceTest {
         assertThat(textCaptor.getValue()).contains("has moved their booking");
         assertThat(textCaptor.getValue()).contains("From: ");
         assertThat(textCaptor.getValue()).contains("To: ");
+    }
+
+    @Test
+    void businessNoticesAreBestEffortWhenTextBuildFails() {
+        BookingResponse malformed = BookingResponse.builder()
+                .status(BookingStatus.CANCELLED)
+                .startDatetime(OffsetDateTime.now())
+                .build();
+
+        assertThat(catchThrowable(() ->
+                notificationService.sendBusinessCancelledNotice(business, malformed)))
+                .isNull();
+        assertThat(catchThrowable(() ->
+                notificationService.sendBusinessRescheduledNotice(
+                        business, malformed, OffsetDateTime.now().minusDays(1))))
+                .isNull();
     }
 }
