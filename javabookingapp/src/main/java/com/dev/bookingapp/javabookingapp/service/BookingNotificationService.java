@@ -2,6 +2,7 @@ package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.entity.Business;
+import com.dev.bookingapp.javabookingapp.entity.enums.BookingStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,14 +37,22 @@ public class BookingNotificationService {
         String priceLine = booking.getPrice() != null
                 ? "Price: " + business.getCurrency() + " " + booking.getPrice() + "\n"
                 : "";
+        boolean confirmed = booking.getStatus() == BookingStatus.CONFIRMED;
+        String intro = confirmed
+                ? "Here are the details of your booking with " + business.getName() + ":\n\n"
+                : "Here are the details of your booking request with " + business.getName() + ":\n\n";
+        String outro = confirmed
+                ? "\nYou're all set — your booking is confirmed. " + business.getName()
+                        + " will be in touch if anything changes.\n\n"
+                : "\nYour booking is awaiting confirmation from " + business.getName()
+                        + ". They will be in touch if anything changes.\n\n";
         String text = "Hi " + booking.getCustomer().getFirstName() + ",\n\n"
-                + "Here are the details of your booking request with " + business.getName() + ":\n\n"
+                + intro
                 + "Service: " + booking.getService().getName() + "\n"
                 + "When: " + when + "\n"
                 + "Duration: " + booking.getService().getDurationMinutes() + " minutes\n"
                 + priceLine
-                + "\nYour booking is awaiting confirmation from " + business.getName()
-                + ". They will be in touch if anything changes.\n\n"
+                + outro
                 + "See you soon!\n";
 
         try {
