@@ -13,6 +13,7 @@ import com.dev.bookingapp.javabookingapp.exception.ResourceNotFoundException;
 import com.dev.bookingapp.javabookingapp.mapper.BookingMapper;
 import com.dev.bookingapp.javabookingapp.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookingService {
 
     private final BookingRepository bookingRepository;
@@ -33,6 +35,7 @@ public class BookingService {
     private final UserService userService;
     private final AvailabilityService availabilityService;
     private final BookingNotificationService bookingNotificationService;
+    private final BookingManageTokenService manageTokenService;
 
     @Transactional(readOnly = true)
     public BookingResponse getById(UUID businessId, UUID bookingId) {
@@ -104,10 +107,17 @@ public class BookingService {
 
         BookingResponse created = create(businessId, bookingRequest);
 
-        if (Boolean.TRUE.equals(request.getEmailReminder())) {
-            // Best-effort: an email failure never fails the booking
-            bookingNotificationService.sendBookingDetails(business, created, account.getEmail());
+        // Always-on: the details email carries the customer's manage link.
+        // Both are best-effort — the booking never fails because of them.
+        String manageLink = null;
+        try {
+            manageLink = manageTokenService.issueLink(
+                    bookingRepository.getReferenceById(created.getId()));
+        } catch (RuntimeException ex) {
+            log.error("Could not issue manage link for booking {}", created.getId(), ex);
         }
+        bookingNotificationService.sendBookingDetails(
+                business, created, account.getEmail(), manageLink);
 
         return created;
     }

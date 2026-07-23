@@ -65,7 +65,7 @@ class BookingNotificationServiceTest {
 
     private String sentText(BookingStatus status) {
         notificationService.sendBookingDetails(
-                business, booking(status), "jane@example.com");
+                business, booking(status), "jane@example.com", null);
 
         ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
         verify(emailSender).send(
@@ -93,6 +93,26 @@ class BookingNotificationServiceTest {
         assertThat(text).contains("booking request");
         assertThat(text).contains("awaiting confirmation");
         assertThat(text).doesNotContain("your booking is confirmed");
+    }
+
+    @Test
+    void detailsEmailIncludesManageLinkWhenProvided() {
+        notificationService.sendBookingDetails(
+                business, booking(BookingStatus.CONFIRMED), "jane@example.com",
+                "https://bookingbase.co.uk/manage/booking/abc123");
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(any(), any(), any(), any(), textCaptor.capture());
+        assertThat(textCaptor.getValue())
+                .contains("Need to make a change? Cancel or reschedule your booking here:")
+                .contains("https://bookingbase.co.uk/manage/booking/abc123");
+    }
+
+    @Test
+    void detailsEmailOmitsManageParagraphWhenLinkIsNull() {
+        String text = sentText(BookingStatus.CONFIRMED);
+
+        assertThat(text).doesNotContain("Cancel or reschedule");
     }
 
     @Test

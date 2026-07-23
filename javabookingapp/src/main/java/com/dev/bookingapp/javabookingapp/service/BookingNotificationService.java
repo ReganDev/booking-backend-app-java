@@ -26,7 +26,8 @@ public class BookingNotificationService {
 
     private final ResendEmailSender emailSender;
 
-    public void sendBookingDetails(Business business, BookingResponse booking, String customerEmail) {
+    public void sendBookingDetails(Business business, BookingResponse booking,
+                                   String customerEmail, String manageLink) {
         if (!emailSender.isConfigured()) {
             log.warn("Booking email requested but RESEND_API_KEY is not configured; skipping");
             return;
@@ -39,14 +40,24 @@ public class BookingNotificationService {
                 ? "Price: " + business.getCurrency() + " " + booking.getPrice() + "\n"
                 : "";
         boolean confirmed = booking.getStatus() == BookingStatus.CONFIRMED;
+        boolean pending = booking.getStatus() == BookingStatus.PENDING;
         String intro = confirmed
                 ? "Here are the details of your booking with " + business.getName() + ":\n\n"
                 : "Here are the details of your booking request with " + business.getName() + ":\n\n";
-        String outro = confirmed
-                ? "\nYou're all set — your booking is confirmed. " + business.getName()
-                        + " will be in touch if anything changes.\n\n"
-                : "\nYour booking is awaiting confirmation from " + business.getName()
-                        + ". They will be in touch if anything changes.\n\n";
+        String outro;
+        if (confirmed) {
+            outro = "\nYou're all set — your booking is confirmed. " + business.getName()
+                    + " will be in touch if anything changes.\n\n";
+        } else if (pending) {
+            outro = "\nYour booking is awaiting confirmation from " + business.getName()
+                    + ". They will be in touch if anything changes.\n\n";
+        } else {
+            outro = "\nIf anything changes, " + business.getName() + " will be in touch.\n\n";
+        }
+        String managePart = manageLink != null
+                ? "Need to make a change? Cancel or reschedule your booking here:\n"
+                        + manageLink + "\n\n"
+                : "";
         String text = "Hi " + booking.getCustomer().getFirstName() + ",\n\n"
                 + intro
                 + "Service: " + booking.getService().getName() + "\n"
@@ -54,6 +65,7 @@ public class BookingNotificationService {
                 + "Duration: " + booking.getService().getDurationMinutes() + " minutes\n"
                 + priceLine
                 + outro
+                + managePart
                 + "See you soon!\n";
 
         try {

@@ -32,6 +32,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,6 +55,10 @@ class BookingServiceTest {
     private UserService userService;
     @Mock
     private AvailabilityService availabilityService;
+    @Mock
+    private BookingNotificationService bookingNotificationService;
+    @Mock
+    private BookingManageTokenService manageTokenService;
 
     @InjectMocks
     private BookingService bookingService;
@@ -293,5 +298,30 @@ class BookingServiceTest {
         Booking saved = createAndCaptureSavedBooking();
 
         assertThat(saved.getStatus()).isEqualTo(BookingStatus.PENDING);
+    }
+
+    @Test
+    void publicBookingAlwaysSendsDetailsEmailWithManageLink() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getOrCreateFromUser(any(), any())).thenReturn(
+                CustomerResponse.builder().id(customer.getId()).build());
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().id(UUID.randomUUID()).build());
+        when(manageTokenService.issueLink(any())).thenReturn("https://x/manage/booking/tok");
+
+        PublicBookingRequest request = publicRequest();
+        request.setEmailReminder(false); // opting out must no longer suppress the email
+
+        bookingService.createPublicBooking(business.getId(), request, customerAccount.getId());
+
+        verify(bookingNotificationService).sendBookingDetails(
+                eq(business), any(BookingResponse.class), eq(customerAccount.getEmail()),
+                eq("https://x/manage/booking/tok"));
     }
 }
