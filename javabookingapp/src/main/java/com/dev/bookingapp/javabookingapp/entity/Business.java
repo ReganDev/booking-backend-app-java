@@ -78,6 +78,10 @@ public class Business extends BaseEntity {
     private Integer cancellationNoticeHours = 24;
 
     @Builder.Default
+    @Column(name = "auto_confirm_bookings", nullable = false)
+    private Boolean autoConfirmBookings = true;
+
+    @Builder.Default
     @Column(name = "slot_duration_minutes")
     private Integer slotDurationMinutes = 30;
 

@@ -37,6 +37,7 @@ public class BusinessRequest {
     private Integer bookingAdvanceDays;
     private Integer bookingNoticeHours;
     private Integer cancellationNoticeHours;
+    private Boolean autoConfirmBookings;
     private Integer slotDurationMinutes;
     private Integer bufferMinutes;
 }
