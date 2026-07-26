@@ -54,12 +54,17 @@ public class CustomerService {
     public CustomerResponse create(UUID businessId, CustomerRequest request) {
         Business business = businessService.getEntityById(businessId);
 
-        if (customerRepository.existsByBusinessIdAndEmail(businessId, request.getEmail())) {
+        String email = EmailVerificationService.normalizeEmail(request.getEmail());
+
+        if (customerRepository.existsByBusinessIdAndEmailIgnoreCase(businessId, email)) {
             throw new ConflictException("A customer with this email already exists");
         }
 
         Customer customer = customerMapper.toEntity(request);
         customer.setBusiness(business);
+        // Store the canonical form rather than whatever casing was typed, so the
+        // unique constraint and every later lookup agree on what this email is.
+        customer.setEmail(email);
 
         Customer saved = customerRepository.save(customer);
         return customerMapper.toResponse(saved);
@@ -67,7 +72,8 @@ public class CustomerService {
 
     @Transactional
     public CustomerResponse getOrCreate(UUID businessId, CustomerRequest request) {
-        return customerRepository.findByBusinessIdAndEmail(businessId, request.getEmail())
+        String email = EmailVerificationService.normalizeEmail(request.getEmail());
+        return customerRepository.findByBusinessIdAndEmailIgnoreCase(businessId, email)
                 .map(customerMapper::toResponse)
                 .orElseGet(() -> create(businessId, request));
     }
@@ -99,13 +105,24 @@ public class CustomerService {
         Customer customer = customerRepository.findByBusinessIdAndId(businessId, customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", customerId));
 
-        if (request.getEmail() != null && !request.getEmail().equals(customer.getEmail())) {
-            if (customerRepository.existsByBusinessIdAndEmail(businessId, request.getEmail())) {
-                throw new ConflictException("A customer with this email already exists");
-            }
+        // A null email means "leave it as it is" (updateEntity ignores nulls), so it
+        // must stay null here: normalizeEmail would turn it into "" and blank the
+        // stored address.
+        String email = request.getEmail() == null
+                ? null
+                : EmailVerificationService.normalizeEmail(request.getEmail());
+
+        // equalsIgnoreCase, so re-saving a legacy "Jane@x.com" as "jane@x.com" is
+        // recognised as the same address and doesn't conflict against itself.
+        if (email != null && !email.equalsIgnoreCase(customer.getEmail())
+                && customerRepository.existsByBusinessIdAndEmailIgnoreCase(businessId, email)) {
+            throw new ConflictException("A customer with this email already exists");
         }
 
         customerMapper.updateEntity(request, customer);
+        if (email != null) {
+            customer.setEmail(email);
+        }
         Customer saved = customerRepository.save(customer);
         return customerMapper.toResponse(saved);
     }

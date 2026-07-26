@@ -16,13 +16,14 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
     Page<Customer> findByBusinessId(UUID businessId, Pageable pageable);
 
-    Optional<Customer> findByBusinessIdAndEmail(UUID businessId, String email);
-
+    // Email matching is deliberately case-insensitive everywhere: UNIQUE(business_id,
+    // email) compares bytes, so a case-sensitive lookup lets "Jane@x.com" and
+    // "jane@x.com" both insert and split one person's history across two rows.
     Optional<Customer> findByBusinessIdAndEmailIgnoreCase(UUID businessId, String email);
 
     Optional<Customer> findByBusinessIdAndId(UUID businessId, UUID customerId);
 
-    boolean existsByBusinessIdAndEmail(UUID businessId, String email);
+    boolean existsByBusinessIdAndEmailIgnoreCase(UUID businessId, String email);
 
     @Query("SELECT c FROM Customer c WHERE c.business.id = :businessId AND " +
            "(LOWER(c.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
