@@ -11,4 +11,11 @@ public class BookingStatusRequest {
     private BookingStatus status;
 
     private String cancellationReason;
+
+    /**
+     * Only meaningful for a booking that belongs to a series. Absent means
+     * {@link CancelScope#THIS_ONLY}, so callers that predate recurrence are
+     * unaffected.
+     */
+    private CancelScope scope;
 }

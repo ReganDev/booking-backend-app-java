@@ -25,6 +25,9 @@ public class BookingResponse {
     private Boolean smsReminder;
     private OffsetDateTime createdAt;
 
+    /** Set when this booking is one occurrence of a standing appointment. */
+    private UUID seriesId;
+
     // Nested info
     private CustomerInfo customer;
     private ServiceInfo service;

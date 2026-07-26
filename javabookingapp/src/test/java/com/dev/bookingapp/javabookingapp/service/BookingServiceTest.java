@@ -1,11 +1,14 @@
 package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.dto.request.BookingRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.BookingStatusRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.CancelScope;
 import com.dev.bookingapp.javabookingapp.dto.request.CustomerRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.CustomerResponse;
 import com.dev.bookingapp.javabookingapp.entity.Booking;
+import com.dev.bookingapp.javabookingapp.entity.BookingSeries;
 import com.dev.bookingapp.javabookingapp.entity.Business;
 import com.dev.bookingapp.javabookingapp.entity.Customer;
 import com.dev.bookingapp.javabookingapp.entity.User;
@@ -32,8 +35,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +59,10 @@ class BookingServiceTest {
     private UserService userService;
     @Mock
     private AvailabilityService availabilityService;
+    @Mock
+    private BookingNotificationService bookingNotificationService;
+    @Mock
+    private BookingManageTokenService manageTokenService;
 
     @InjectMocks
     private BookingService bookingService;
@@ -293,5 +302,135 @@ class BookingServiceTest {
         Booking saved = createAndCaptureSavedBooking();
 
         assertThat(saved.getStatus()).isEqualTo(BookingStatus.PENDING);
+    }
+
+    private Booking seriesOccurrence(BookingSeries series, OffsetDateTime at, BookingStatus status) {
+        return Booking.builder()
+                .id(UUID.randomUUID())
+                .business(business)
+                .customer(customer)
+                .service(service)
+                .series(series)
+                .startDatetime(at)
+                .endDatetime(at.plusMinutes(45))
+                .status(status)
+                .build();
+    }
+
+    private BookingStatusRequest cancelRequest(CancelScope scope) {
+        BookingStatusRequest request = new BookingStatusRequest();
+        request.setStatus(BookingStatus.CANCELLED);
+        request.setCancellationReason("Client moved away");
+        request.setScope(scope);
+        return request;
+    }
+
+    @Test
+    void cancellingWithThisAndFutureAlsoCancelsLaterOccurrencesOfTheSeries() {
+        BookingSeries series = BookingSeries.builder().id(UUID.randomUUID()).build();
+        Booking target = seriesOccurrence(series, start, BookingStatus.CONFIRMED);
+        Booking nextWeek = seriesOccurrence(series, start.plusWeeks(1), BookingStatus.CONFIRMED);
+        Booking weekAfter = seriesOccurrence(series, start.plusWeeks(2), BookingStatus.PENDING);
+
+        when(bookingRepository.findByBusinessIdAndId(business.getId(), target.getId()))
+                .thenReturn(java.util.Optional.of(target));
+        when(bookingRepository.findBySeriesIdAndStartDatetimeGreaterThanEqualAndStatusIn(
+                eq(series.getId()), eq(start), any()))
+                .thenReturn(List.of(target, nextWeek, weekAfter));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.updateStatus(
+                business.getId(), target.getId(), cancelRequest(CancelScope.THIS_AND_FUTURE));
+
+        assertThat(target.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(nextWeek.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(weekAfter.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(nextWeek.getCancellationReason()).isEqualTo("Client moved away");
+        // The target must not be written twice: it is in the sibling query result.
+        verify(bookingRepository, times(3)).save(any(Booking.class));
+    }
+
+    @Test
+    void cancellingWithThisOnlyLeavesTheRestOfTheSeriesAlone() {
+        BookingSeries series = BookingSeries.builder().id(UUID.randomUUID()).build();
+        Booking target = seriesOccurrence(series, start, BookingStatus.CONFIRMED);
+
+        when(bookingRepository.findByBusinessIdAndId(business.getId(), target.getId()))
+                .thenReturn(java.util.Optional.of(target));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.updateStatus(
+                business.getId(), target.getId(), cancelRequest(CancelScope.THIS_ONLY));
+
+        assertThat(target.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        verify(bookingRepository, never())
+                .findBySeriesIdAndStartDatetimeGreaterThanEqualAndStatusIn(any(), any(), any());
+    }
+
+    @Test
+    void thisAndFutureOnABookingWithNoSeriesTouchesOnlyThatBooking() {
+        Booking loner = seriesOccurrence(null, start, BookingStatus.CONFIRMED);
+
+        when(bookingRepository.findByBusinessIdAndId(business.getId(), loner.getId()))
+                .thenReturn(java.util.Optional.of(loner));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.updateStatus(
+                business.getId(), loner.getId(), cancelRequest(CancelScope.THIS_AND_FUTURE));
+
+        assertThat(loner.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        verify(bookingRepository, never())
+                .findBySeriesIdAndStartDatetimeGreaterThanEqualAndStatusIn(any(), any(), any());
+    }
+
+    @Test
+    void statusChangeWithNoScopeBehavesAsItAlwaysHas() {
+        // Every caller that predates recurrence sends no scope at all.
+        Booking booking = seriesOccurrence(null, start, BookingStatus.PENDING);
+
+        when(bookingRepository.findByBusinessIdAndId(business.getId(), booking.getId()))
+                .thenReturn(java.util.Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        BookingStatusRequest request = new BookingStatusRequest();
+        request.setStatus(BookingStatus.CONFIRMED);
+
+        bookingService.updateStatus(business.getId(), booking.getId(), request);
+
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(booking.getCancelledAt()).isNull();
+    }
+
+    @Test
+    void publicBookingAlwaysSendsDetailsEmailWithManageLink() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getOrCreateFromUser(any(), any())).thenReturn(
+                CustomerResponse.builder().id(customer.getId()).build());
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().id(UUID.randomUUID()).build());
+        when(manageTokenService.issueLink(any())).thenReturn("https://x/manage/booking/tok");
+
+        PublicBookingRequest request = publicRequest();
+        request.setEmailReminder(false); // opting out must no longer suppress the email
+
+        bookingService.createPublicBooking(business.getId(), request, customerAccount.getId());
+
+        verify(bookingNotificationService).sendBookingDetails(
+                eq(business), any(BookingResponse.class), eq(customerAccount.getEmail()),
+                eq("https://x/manage/booking/tok"));
     }
 }

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -25,7 +26,8 @@ public class BookingNotificationService {
 
     private final ResendEmailSender emailSender;
 
-    public void sendBookingDetails(Business business, BookingResponse booking, String customerEmail) {
+    public void sendBookingDetails(Business business, BookingResponse booking,
+                                   String customerEmail, String manageLink) {
         if (!emailSender.isConfigured()) {
             log.warn("Booking email requested but RESEND_API_KEY is not configured; skipping");
             return;
@@ -38,14 +40,24 @@ public class BookingNotificationService {
                 ? "Price: " + business.getCurrency() + " " + booking.getPrice() + "\n"
                 : "";
         boolean confirmed = booking.getStatus() == BookingStatus.CONFIRMED;
+        boolean pending = booking.getStatus() == BookingStatus.PENDING;
         String intro = confirmed
                 ? "Here are the details of your booking with " + business.getName() + ":\n\n"
                 : "Here are the details of your booking request with " + business.getName() + ":\n\n";
-        String outro = confirmed
-                ? "\nYou're all set — your booking is confirmed. " + business.getName()
-                        + " will be in touch if anything changes.\n\n"
-                : "\nYour booking is awaiting confirmation from " + business.getName()
-                        + ". They will be in touch if anything changes.\n\n";
+        String outro;
+        if (confirmed) {
+            outro = "\nYou're all set — your booking is confirmed. " + business.getName()
+                    + " will be in touch if anything changes.\n\n";
+        } else if (pending) {
+            outro = "\nYour booking is awaiting confirmation from " + business.getName()
+                    + ". They will be in touch if anything changes.\n\n";
+        } else {
+            outro = "\nIf anything changes, " + business.getName() + " will be in touch.\n\n";
+        }
+        String managePart = manageLink != null
+                ? "Need to make a change? Cancel or reschedule your booking here:\n"
+                        + manageLink + "\n\n"
+                : "";
         String text = "Hi " + booking.getCustomer().getFirstName() + ",\n\n"
                 + intro
                 + "Service: " + booking.getService().getName() + "\n"
@@ -53,6 +65,7 @@ public class BookingNotificationService {
                 + "Duration: " + booking.getService().getDurationMinutes() + " minutes\n"
                 + priceLine
                 + outro
+                + managePart
                 + "See you soon!\n";
 
         try {
@@ -65,6 +78,54 @@ public class BookingNotificationService {
             log.info("Booking details email sent to {} for booking {}", customerEmail, booking.getId());
         } catch (Exception ex) {
             log.error("Failed to send booking details email for booking {}", booking.getId(), ex);
+        }
+    }
+
+    /** Tells the business a customer cancelled online. Best-effort. */
+    public void sendBusinessCancelledNotice(Business business, BookingResponse booking) {
+        if (!emailSender.isConfigured()) {
+            log.warn("Cancel notice requested but RESEND_API_KEY is not configured; skipping");
+            return;
+        }
+        try {
+            ZoneId zone = AvailabilityService.resolveZone(business.getTimezone());
+            String when = booking.getStartDatetime().atZoneSameInstant(zone).format(WHEN_FORMAT);
+            String text = "Hi,\n\n"
+                    + booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName()
+                    + " has cancelled their booking:\n\n"
+                    + "Service: " + booking.getService().getName() + "\n"
+                    + "When: " + when + "\n\n"
+                    + "The slot is now free for other customers.\n";
+            emailSender.send("BookingBase", business.getEmail(), null,
+                    "Booking cancelled: " + booking.getService().getName(), text);
+            log.info("Cancel notice sent to business {} for booking {}", business.getId(), booking.getId());
+        } catch (Exception ex) {
+            log.error("Failed to send cancel notice for booking {}", booking.getId(), ex);
+        }
+    }
+
+    /** Tells the business a customer rescheduled online. Best-effort. */
+    public void sendBusinessRescheduledNotice(Business business, BookingResponse booking,
+                                              OffsetDateTime oldStart) {
+        if (!emailSender.isConfigured()) {
+            log.warn("Reschedule notice requested but RESEND_API_KEY is not configured; skipping");
+            return;
+        }
+        try {
+            ZoneId zone = AvailabilityService.resolveZone(business.getTimezone());
+            String from = oldStart.atZoneSameInstant(zone).format(WHEN_FORMAT);
+            String to = booking.getStartDatetime().atZoneSameInstant(zone).format(WHEN_FORMAT);
+            String text = "Hi,\n\n"
+                    + booking.getCustomer().getFirstName() + " " + booking.getCustomer().getLastName()
+                    + " has moved their booking:\n\n"
+                    + "Service: " + booking.getService().getName() + "\n"
+                    + "From: " + from + "\n"
+                    + "To: " + to + "\n";
+            emailSender.send("BookingBase", business.getEmail(), null,
+                    "Booking rescheduled: " + booking.getService().getName(), text);
+            log.info("Reschedule notice sent to business {} for booking {}", business.getId(), booking.getId());
+        } catch (Exception ex) {
+            log.error("Failed to send reschedule notice for booking {}", booking.getId(), ex);
         }
     }
 }

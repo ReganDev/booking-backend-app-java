@@ -12,6 +12,7 @@ import org.mapstruct.*;
 public interface BookingMapper {
 
     @Mapping(target = "businessId", source = "business.id")
+    @Mapping(target = "seriesId", source = "series.id")
     @Mapping(target = "customer", source = "customer", qualifiedByName = "toCustomerInfo")
     @Mapping(target = "service", source = "service", qualifiedByName = "toServiceInfo")
     @Mapping(target = "staff", source = "staff", qualifiedByName = "toStaffInfo")
@@ -64,6 +65,7 @@ public interface BookingMapper {
     @Mapping(target = "price", ignore = true)
     @Mapping(target = "cancelledAt", ignore = true)
     @Mapping(target = "cancellationReason", ignore = true)
+    @Mapping(target = "series", ignore = true)
     Booking toEntity(BookingRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -79,5 +81,6 @@ public interface BookingMapper {
     @Mapping(target = "price", ignore = true)
     @Mapping(target = "cancelledAt", ignore = true)
     @Mapping(target = "cancellationReason", ignore = true)
+    @Mapping(target = "series", ignore = true)
     void updateEntity(BookingRequest request, @MappingTarget Booking booking);
 }

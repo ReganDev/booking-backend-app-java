@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -52,6 +53,7 @@ class BookingNotificationServiceTest {
                 .price(new BigDecimal("32.50"))
                 .customer(BookingResponse.CustomerInfo.builder()
                         .firstName("Jane")
+                        .lastName("Doe")
                         .email("jane@example.com")
                         .build())
                 .service(BookingResponse.ServiceInfo.builder()
@@ -63,7 +65,7 @@ class BookingNotificationServiceTest {
 
     private String sentText(BookingStatus status) {
         notificationService.sendBookingDetails(
-                business, booking(status), "jane@example.com");
+                business, booking(status), "jane@example.com", null);
 
         ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
         verify(emailSender).send(
@@ -91,5 +93,76 @@ class BookingNotificationServiceTest {
         assertThat(text).contains("booking request");
         assertThat(text).contains("awaiting confirmation");
         assertThat(text).doesNotContain("your booking is confirmed");
+    }
+
+    @Test
+    void detailsEmailIncludesManageLinkWhenProvided() {
+        notificationService.sendBookingDetails(
+                business, booking(BookingStatus.CONFIRMED), "jane@example.com",
+                "https://bookingbase.co.uk/manage/booking/abc123");
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(any(), any(), any(), any(), textCaptor.capture());
+        assertThat(textCaptor.getValue())
+                .contains("Need to make a change? Cancel or reschedule your booking here:")
+                .contains("https://bookingbase.co.uk/manage/booking/abc123");
+    }
+
+    @Test
+    void detailsEmailOmitsManageParagraphWhenLinkIsNull() {
+        String text = sentText(BookingStatus.CONFIRMED);
+
+        assertThat(text).doesNotContain("Cancel or reschedule");
+    }
+
+    @Test
+    void businessCancelNoticeNamesCustomerServiceAndFreedSlot() {
+        notificationService.sendBusinessCancelledNotice(
+                business, booking(BookingStatus.CANCELLED));
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(
+                eq("BookingBase"),
+                eq(business.getEmail()),
+                eq(null),
+                eq("Booking cancelled: Haircut"),
+                textCaptor.capture());
+        assertThat(textCaptor.getValue()).contains("Jane");
+        assertThat(textCaptor.getValue()).contains("has cancelled their booking");
+        assertThat(textCaptor.getValue()).contains("now free for other customers");
+    }
+
+    @Test
+    void businessRescheduleNoticeShowsOldAndNewTimes() {
+        notificationService.sendBusinessRescheduledNotice(
+                business, booking(BookingStatus.CONFIRMED),
+                OffsetDateTime.now().plusDays(2));
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(
+                eq("BookingBase"),
+                eq(business.getEmail()),
+                eq(null),
+                eq("Booking rescheduled: Haircut"),
+                textCaptor.capture());
+        assertThat(textCaptor.getValue()).contains("has moved their booking");
+        assertThat(textCaptor.getValue()).contains("From: ");
+        assertThat(textCaptor.getValue()).contains("To: ");
+    }
+
+    @Test
+    void businessNoticesAreBestEffortWhenTextBuildFails() {
+        BookingResponse malformed = BookingResponse.builder()
+                .status(BookingStatus.CANCELLED)
+                .startDatetime(OffsetDateTime.now())
+                .build();
+
+        assertThat(catchThrowable(() ->
+                notificationService.sendBusinessCancelledNotice(business, malformed)))
+                .isNull();
+        assertThat(catchThrowable(() ->
+                notificationService.sendBusinessRescheduledNotice(
+                        business, malformed, OffsetDateTime.now().minusDays(1))))
+                .isNull();
     }
 }
