@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -76,4 +77,12 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     long countBookingsInPeriod(@Param("businessId") UUID businessId,
                                @Param("start") OffsetDateTime start,
                                @Param("end") OffsetDateTime end);
+
+    /**
+     * Occurrences of a series from a given point onwards. Used by "cancel this
+     * and all future": earlier occurrences have already happened and are left
+     * alone, as are ones already completed or cancelled.
+     */
+    List<Booking> findBySeriesIdAndStartDatetimeGreaterThanEqualAndStatusIn(
+            UUID seriesId, OffsetDateTime start, Collection<BookingStatus> statuses);
 }

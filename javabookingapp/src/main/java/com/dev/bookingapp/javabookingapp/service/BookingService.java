@@ -2,6 +2,7 @@ package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.dto.request.BookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.BookingStatusRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.CancelScope;
 import com.dev.bookingapp.javabookingapp.dto.request.PublicBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
 import com.dev.bookingapp.javabookingapp.dto.response.CustomerResponse;
@@ -153,20 +154,10 @@ public class BookingService {
             if (!staff.getBusiness().getId().equals(businessId)) {
                 throw new BadRequestException("Staff does not belong to this business");
             }
+        }
 
-            // Check for conflicts
-            List<Booking> conflicts = bookingRepository.findConflictingBookings(
-                    staff.getId(), request.getStartDatetime(), endDatetime, null);
-            if (!conflicts.isEmpty()) {
-                throw new ConflictException("Staff member has a conflicting booking at this time");
-            }
-        } else {
-            // No staff assigned: treat the whole business as a single resource
-            List<Booking> conflicts = bookingRepository.findConflictingBusinessBookings(
-                    businessId, request.getStartDatetime(), endDatetime, null);
-            if (!conflicts.isEmpty()) {
-                throw new ConflictException("There is already a booking at this time");
-            }
+        if (hasConflict(businessId, staff, request.getStartDatetime(), endDatetime, null)) {
+            throw new ConflictException(conflictMessage(staff));
         }
 
         // The reminder flags are optional on the request but NOT NULL in the
@@ -197,6 +188,24 @@ public class BookingService {
         Booking booking = bookingRepository.findByBusinessIdAndId(businessId, bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", bookingId));
 
+        Booking saved = applyStatus(booking, request);
+
+        if (request.getScope() == CancelScope.THIS_AND_FUTURE && booking.getSeries() != null) {
+            // Later occurrences only, and only ones still standing: an
+            // appointment that already happened is history, not a plan.
+            bookingRepository.findBySeriesIdAndStartDatetimeGreaterThanEqualAndStatusIn(
+                            booking.getSeries().getId(),
+                            booking.getStartDatetime(),
+                            List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED))
+                    .stream()
+                    .filter(sibling -> !sibling.getId().equals(booking.getId()))
+                    .forEach(sibling -> applyStatus(sibling, request));
+        }
+
+        return bookingMapper.toResponse(saved);
+    }
+
+    private Booking applyStatus(Booking booking, BookingStatusRequest request) {
         booking.setStatus(request.getStatus());
 
         if (request.getStatus() == BookingStatus.CANCELLED) {
@@ -204,8 +213,7 @@ public class BookingService {
             booking.setCancellationReason(request.getCancellationReason());
         }
 
-        Booking saved = bookingRepository.save(booking);
-        return bookingMapper.toResponse(saved);
+        return bookingRepository.save(booking);
     }
 
     @Transactional
@@ -226,19 +234,9 @@ public class BookingService {
                               booking.getBusiness().getBufferMinutes();
         OffsetDateTime newEndTime = newStartTime.plusMinutes(durationMinutes);
 
-        // Check for conflicts if staff is assigned
-        if (booking.getStaff() != null) {
-            List<Booking> conflicts = bookingRepository.findConflictingBookings(
-                    booking.getStaff().getId(), newStartTime, newEndTime, booking.getId());
-            if (!conflicts.isEmpty()) {
-                throw new ConflictException("Staff member has a conflicting booking at this time");
-            }
-        } else {
-            List<Booking> conflicts = bookingRepository.findConflictingBusinessBookings(
-                    booking.getBusiness().getId(), newStartTime, newEndTime, booking.getId());
-            if (!conflicts.isEmpty()) {
-                throw new ConflictException("There is already a booking at this time");
-            }
+        if (hasConflict(booking.getBusiness().getId(), booking.getStaff(),
+                newStartTime, newEndTime, booking.getId())) {
+            throw new ConflictException(conflictMessage(booking.getStaff()));
         }
 
         booking.setStartDatetime(newStartTime);
@@ -246,5 +244,27 @@ public class BookingService {
 
         Booking saved = bookingRepository.save(booking);
         return bookingMapper.toResponse(saved);
+    }
+
+    /**
+     * Whether the window is already taken. With a staff member assigned the
+     * clash is against that person's diary; without one the whole business is
+     * treated as a single resource.
+     *
+     * <p>Package-private so {@link BookingSeriesService} can ask the same
+     * question per occurrence without having to catch an exception.
+     */
+    boolean hasConflict(UUID businessId, User staff,
+                        OffsetDateTime start, OffsetDateTime end, UUID excludeBookingId) {
+        List<Booking> conflicts = staff != null
+                ? bookingRepository.findConflictingBookings(staff.getId(), start, end, excludeBookingId)
+                : bookingRepository.findConflictingBusinessBookings(businessId, start, end, excludeBookingId);
+        return !conflicts.isEmpty();
+    }
+
+    static String conflictMessage(User staff) {
+        return staff != null
+                ? "Staff member has a conflicting booking at this time"
+                : "There is already a booking at this time";
     }
 }

@@ -35,6 +35,11 @@ public class Booking extends BaseEntity {
     @JoinColumn(name = "staff_id")
     private User staff;
 
+    /** Set only when this booking is one occurrence of a standing appointment. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "series_id")
+    private BookingSeries series;
+
     @Column(name = "start_datetime", nullable = false)
     private OffsetDateTime startDatetime;
 

@@ -2,7 +2,10 @@ package com.dev.bookingapp.javabookingapp.controller;
 
 import com.dev.bookingapp.javabookingapp.dto.request.BookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.request.BookingStatusRequest;
+import com.dev.bookingapp.javabookingapp.dto.request.RecurringBookingRequest;
 import com.dev.bookingapp.javabookingapp.dto.response.BookingResponse;
+import com.dev.bookingapp.javabookingapp.dto.response.RecurringBookingResponse;
+import com.dev.bookingapp.javabookingapp.service.BookingSeriesService;
 import com.dev.bookingapp.javabookingapp.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,7 @@ import java.util.UUID;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final BookingSeriesService bookingSeriesService;
 
     @GetMapping
     public ResponseEntity<Page<BookingResponse>> getAll(
@@ -61,6 +65,14 @@ public class BookingController {
             @PathVariable UUID businessId,
             @Valid @RequestBody BookingRequest request) {
         BookingResponse created = bookingService.create(businessId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PostMapping("/recurring")
+    public ResponseEntity<RecurringBookingResponse> createRecurring(
+            @PathVariable UUID businessId,
+            @Valid @RequestBody RecurringBookingRequest request) {
+        RecurringBookingResponse created = bookingSeriesService.create(businessId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
