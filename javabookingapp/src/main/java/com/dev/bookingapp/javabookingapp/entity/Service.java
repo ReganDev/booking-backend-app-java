@@ -45,6 +45,11 @@ public class Service extends BaseEntity {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
+    // Mobile visit: service happens at the customer's address
+    @Builder.Default
+    @Column(name = "requires_customer_address", nullable = false)
+    private Boolean requiresCustomerAddress = false;
+
     // Relationships
     @OneToMany(mappedBy = "service", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

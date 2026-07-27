@@ -18,4 +18,5 @@ public class ServiceResponse {
     private String color;
     private Integer displayOrder;
     private Boolean isActive;
+    private Boolean requiresCustomerAddress;
 }
