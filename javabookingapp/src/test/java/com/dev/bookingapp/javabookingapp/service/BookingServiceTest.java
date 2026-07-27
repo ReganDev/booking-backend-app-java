@@ -63,6 +63,8 @@ class BookingServiceTest {
     private BookingNotificationService bookingNotificationService;
     @Mock
     private BookingManageTokenService manageTokenService;
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private BookingService bookingService;
@@ -471,6 +473,37 @@ class BookingServiceTest {
         assertThat(mapped.getAddressLine2()).isEqualTo("Flat 2");
         assertThat(mapped.getAddressCity()).isEqualTo("Manchester");
         assertThat(mapped.getAddressPostcode()).isEqualTo("SW1A 1AA");
+    }
+
+    @Test
+    void bookingWithPostcodePublishesDistanceEventAfterSave() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        Booking entity = new Booking();
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(entity);
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
+            Booking saved = inv.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            // The mocked mapper doesn't copy fields, so mimic the postcode landing
+            saved.setAddressPostcode("M1 1AE");
+            return saved;
+        });
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.create(business.getId(), directRequest());
+
+        verify(eventPublisher).publishEvent(new BookingCreatedEvent(entity.getId()));
+    }
+
+    @Test
+    void bookingWithoutPostcodePublishesNoEvent() {
+        createAndCaptureSavedBooking();
+
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

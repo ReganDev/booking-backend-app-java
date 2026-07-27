@@ -37,6 +37,7 @@ public class BookingService {
     private final AvailabilityService availabilityService;
     private final BookingNotificationService bookingNotificationService;
     private final BookingManageTokenService manageTokenService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public BookingResponse getById(UUID businessId, UUID bookingId) {
@@ -188,6 +189,10 @@ public class BookingService {
         booking.setPrice(service.getPrice());
 
         Booking saved = bookingRepository.save(booking);
+        if (saved.getAddressPostcode() != null) {
+            // Handled after commit (async) — drive-distance lookup
+            eventPublisher.publishEvent(new BookingCreatedEvent(saved.getId()));
+        }
         return bookingMapper.toResponse(saved);
     }
 
