@@ -25,6 +25,15 @@ public class BookingResponse {
     private Boolean smsReminder;
     private OffsetDateTime createdAt;
 
+    // Customer address for mobile-visit services; distance is best-effort
+    // and may lag the booking by a few seconds (computed asynchronously)
+    private String addressLine1;
+    private String addressLine2;
+    private String addressCity;
+    private String addressPostcode;
+    private Integer distanceMeters;
+    private Integer durationSeconds;
+
     /** Set when this booking is one occurrence of a standing appointment. */
     private UUID seriesId;
 

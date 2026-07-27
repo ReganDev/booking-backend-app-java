@@ -66,6 +66,8 @@ public interface BookingMapper {
     @Mapping(target = "cancelledAt", ignore = true)
     @Mapping(target = "cancellationReason", ignore = true)
     @Mapping(target = "series", ignore = true)
+    @Mapping(target = "distanceMeters", ignore = true)
+    @Mapping(target = "durationSeconds", ignore = true)
     Booking toEntity(BookingRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -82,5 +84,7 @@ public interface BookingMapper {
     @Mapping(target = "cancelledAt", ignore = true)
     @Mapping(target = "cancellationReason", ignore = true)
     @Mapping(target = "series", ignore = true)
+    @Mapping(target = "distanceMeters", ignore = true)
+    @Mapping(target = "durationSeconds", ignore = true)
     void updateEntity(BookingRequest request, @MappingTarget Booking booking);
 }

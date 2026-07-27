@@ -198,6 +198,40 @@ class GuestBookingServiceTest {
         verify(emailSender, never()).send(any(), any(), any(), any(), any());
     }
 
+    @Test
+    void startRejectsMissingAddressForMobileServiceBeforeCreatingAnythingOrEmailing() {
+        bookableService.setRequiresCustomerAddress(true);
+
+        assertThatThrownBy(() -> service.start(startRequest))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("address");
+        verify(userRepository, never()).save(any());
+        verify(sessionRepository, never()).save(any());
+        verify(emailSender, never()).send(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void startPersistsNormalizedAddressOnTheOtpSession() {
+        bookableService.setRequiresCustomerAddress(true);
+        startRequest.setAddressLine1("1 High Street");
+        startRequest.setAddressLine2("Flat 2");
+        startRequest.setAddressCity("Manchester");
+        startRequest.setAddressPostcode(" m1  1ae ");
+        when(userRepository.findByEmailIgnoreCase("gwen@example.com"))
+                .thenReturn(Optional.empty());
+
+        service.start(startRequest);
+
+        ArgumentCaptor<BookingOtpSession> captor =
+                ArgumentCaptor.forClass(BookingOtpSession.class);
+        verify(sessionRepository).save(captor.capture());
+        BookingOtpSession session = captor.getValue();
+        assertThat(session.getAddressLine1()).isEqualTo("1 High Street");
+        assertThat(session.getAddressLine2()).isEqualTo("Flat 2");
+        assertThat(session.getAddressCity()).isEqualTo("Manchester");
+        assertThat(session.getAddressPostcode()).isEqualTo("M1 1AE");
+    }
+
     // --- verify ---
 
     private BookingOtpSession usableSession(User user, String code) {
@@ -247,6 +281,27 @@ class GuestBookingServiceTest {
         assertThat(user.getEmailVerified()).isTrue();
         assertThat(session.getConsumedAt()).isNotNull();
         verify(passwordResetService).issueClaimLink(user);
+    }
+
+    @Test
+    void verifyForwardsSessionAddressIntoThePublicBookingRequest() {
+        User user = guestUser();
+        BookingOtpSession session = usableSession(user, "123456");
+        session.setAddressLine1("1 High Street");
+        session.setAddressCity("Manchester");
+        session.setAddressPostcode("M1 1AE");
+        when(bookingService.createPublicBooking(any(), any(), any()))
+                .thenReturn(BookingResponse.builder().build());
+
+        service.verify(session.getId(), "123456");
+
+        ArgumentCaptor<PublicBookingRequest> captor =
+                ArgumentCaptor.forClass(PublicBookingRequest.class);
+        verify(bookingService).createPublicBooking(
+                eq(business.getId()), captor.capture(), eq(user.getId()));
+        assertThat(captor.getValue().getAddressLine1()).isEqualTo("1 High Street");
+        assertThat(captor.getValue().getAddressCity()).isEqualTo("Manchester");
+        assertThat(captor.getValue().getAddressPostcode()).isEqualTo("M1 1AE");
     }
 
     @Test
