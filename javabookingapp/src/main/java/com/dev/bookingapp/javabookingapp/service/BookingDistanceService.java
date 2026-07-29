@@ -22,6 +22,11 @@ import java.util.Optional;
  * customer postcode, ask OSRM for the driving route. Runs async in its own
  * transaction so no failure here can ever touch the booking itself — a
  * booking without a distance just shows the address on the dashboard.
+ *
+ * <p>A recurring series publishes a single event for its first occurrence;
+ * the computed route is copied here onto every sibling that shares the same
+ * postcode, so the external services are hit once per series, not once per
+ * occurrence.
  */
 @Service
 @RequiredArgsConstructor
@@ -72,10 +77,26 @@ public class BookingDistanceService {
         }
 
         osrmClient.route(origin.get(), destination.get()).ifPresent(route -> {
-            booking.setDistanceMeters(route.distanceMeters());
-            booking.setDurationSeconds(route.durationSeconds());
-            bookingRepository.save(booking);
+            applyRoute(booking, route);
+            propagateToSeriesSiblings(booking, route);
         });
+    }
+
+    private void applyRoute(Booking booking, OsrmClient.Route route) {
+        booking.setDistanceMeters(route.distanceMeters());
+        booking.setDurationSeconds(route.durationSeconds());
+        bookingRepository.save(booking);
+    }
+
+    private void propagateToSeriesSiblings(Booking booking, OsrmClient.Route route) {
+        if (booking.getSeries() == null) {
+            return;
+        }
+        bookingRepository.findBySeriesId(booking.getSeries().getId()).stream()
+                .filter(sibling -> !sibling.getId().equals(booking.getId()))
+                .filter(sibling -> booking.getAddressPostcode().equals(sibling.getAddressPostcode()))
+                .filter(sibling -> sibling.getDistanceMeters() == null)
+                .forEach(sibling -> applyRoute(sibling, route));
     }
 
     private Optional<PostcodesIoClient.Coordinates> resolveBusinessOrigin(Business business) {

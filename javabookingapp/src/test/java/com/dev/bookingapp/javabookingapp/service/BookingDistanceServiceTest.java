@@ -1,6 +1,7 @@
 package com.dev.bookingapp.javabookingapp.service;
 
 import com.dev.bookingapp.javabookingapp.entity.Booking;
+import com.dev.bookingapp.javabookingapp.entity.BookingSeries;
 import com.dev.bookingapp.javabookingapp.entity.Business;
 import com.dev.bookingapp.javabookingapp.repository.BookingRepository;
 import com.dev.bookingapp.javabookingapp.repository.BusinessRepository;
@@ -14,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -126,6 +128,78 @@ class BookingDistanceServiceTest {
 
         assertThat(booking.getDistanceMeters()).isNull();
         verify(bookingRepository, never()).save(any());
+    }
+
+    private Booking sibling(BookingSeries series, String postcode) {
+        return Booking.builder()
+                .id(UUID.randomUUID())
+                .business(business)
+                .addressPostcode(postcode)
+                .series(series)
+                .build();
+    }
+
+    @Test
+    void copiesTheRouteToSeriesSiblingsWithTheSamePostcode() {
+        BookingSeries series = BookingSeries.builder().id(UUID.randomUUID()).build();
+        booking.setSeries(series);
+        Booking sibling1 = sibling(series, "M1 1AE");
+        Booking sibling2 = sibling(series, "M1 1AE");
+        when(bookingRepository.findBySeriesId(series.getId()))
+                .thenReturn(List.of(booking, sibling1, sibling2));
+        when(postcodesIoClient.lookup("SW1A 1AA")).thenReturn(Optional.of(ORIGIN));
+        when(postcodesIoClient.lookup("M1 1AE")).thenReturn(Optional.of(DESTINATION));
+        when(osrmClient.route(ORIGIN, DESTINATION))
+                .thenReturn(Optional.of(new Route(11587, 1080)));
+
+        distanceService.onBookingCreated(new BookingCreatedEvent(booking.getId()));
+
+        assertThat(sibling1.getDistanceMeters()).isEqualTo(11587);
+        assertThat(sibling1.getDurationSeconds()).isEqualTo(1080);
+        assertThat(sibling2.getDistanceMeters()).isEqualTo(11587);
+        assertThat(sibling2.getDurationSeconds()).isEqualTo(1080);
+        verify(bookingRepository).save(sibling1);
+        verify(bookingRepository).save(sibling2);
+        // The customer postcode is still geocoded and routed exactly once.
+        verify(postcodesIoClient, times(1)).lookup("M1 1AE");
+        verify(osrmClient, times(1)).route(any(), any());
+    }
+
+    @Test
+    void leavesSiblingsWithADifferentPostcodeOrExistingDistanceAlone() {
+        BookingSeries series = BookingSeries.builder().id(UUID.randomUUID()).build();
+        booking.setSeries(series);
+        Booking movedSibling = sibling(series, "OL1 1AA");
+        Booking alreadyComputed = sibling(series, "M1 1AE");
+        alreadyComputed.setDistanceMeters(999);
+        alreadyComputed.setDurationSeconds(99);
+        when(bookingRepository.findBySeriesId(series.getId()))
+                .thenReturn(List.of(booking, movedSibling, alreadyComputed));
+        when(postcodesIoClient.lookup("SW1A 1AA")).thenReturn(Optional.of(ORIGIN));
+        when(postcodesIoClient.lookup("M1 1AE")).thenReturn(Optional.of(DESTINATION));
+        when(osrmClient.route(ORIGIN, DESTINATION))
+                .thenReturn(Optional.of(new Route(11587, 1080)));
+
+        distanceService.onBookingCreated(new BookingCreatedEvent(booking.getId()));
+
+        assertThat(movedSibling.getDistanceMeters()).isNull();
+        assertThat(alreadyComputed.getDistanceMeters()).isEqualTo(999);
+        assertThat(alreadyComputed.getDurationSeconds()).isEqualTo(99);
+        verify(bookingRepository, times(1)).save(any());
+        verify(bookingRepository).save(booking);
+    }
+
+    @Test
+    void nonSeriesBookingNeverQueriesSiblings() {
+        when(postcodesIoClient.lookup("SW1A 1AA")).thenReturn(Optional.of(ORIGIN));
+        when(postcodesIoClient.lookup("M1 1AE")).thenReturn(Optional.of(DESTINATION));
+        when(osrmClient.route(ORIGIN, DESTINATION))
+                .thenReturn(Optional.of(new Route(11587, 1080)));
+
+        distanceService.onBookingCreated(new BookingCreatedEvent(booking.getId()));
+
+        verify(bookingRepository, never()).findBySeriesId(any());
+        verify(bookingRepository).save(booking);
     }
 
     @Test
