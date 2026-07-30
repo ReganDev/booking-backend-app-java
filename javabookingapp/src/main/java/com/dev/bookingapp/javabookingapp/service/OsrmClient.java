@@ -35,6 +35,10 @@ public class OsrmClient {
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .defaultHeader("User-Agent", "BookingBase/1.0 (bookingbase.co.uk)")
+                // Ask for an uncompressed body: this client stack fails to
+                // decode a gzipped response ("incorrect header check"), and
+                // these payloads are a kilobyte, so compression buys nothing.
+                .defaultHeader("Accept-Encoding", "identity")
                 .build();
     }
 

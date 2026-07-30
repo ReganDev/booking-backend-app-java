@@ -33,6 +33,10 @@ public class PostcodesIoClient {
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .defaultHeader("User-Agent", "BookingBase/1.0 (bookingbase.co.uk)")
+                // See OsrmClient: a gzipped response breaks this client stack.
+                // postcodes.io happens to send these small bodies uncompressed
+                // today, but it will gzip if asked, so don't ask.
+                .defaultHeader("Accept-Encoding", "identity")
                 .build();
     }
 
