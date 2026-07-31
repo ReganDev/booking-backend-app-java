@@ -20,8 +20,11 @@ public class ResendEmailSender {
 
     public ResendEmailSender(
             @Value("${app.resend.api-key:}") String apiKey,
-            @Value("${app.enquiry.from:onboarding@resend.dev}") String fromAddress) {
-        this.restClient = RestClient.builder().baseUrl("https://api.resend.com").build();
+            @Value("${app.enquiry.from:onboarding@resend.dev}") String fromAddress,
+            // Configurable so the delivery path can be pointed at a local
+            // capture server in tests, the way the geo clients already are.
+            @Value("${app.resend.base-url:https://api.resend.com}") String baseUrl) {
+        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
         this.apiKey = apiKey;
         this.fromAddress = fromAddress;
     }
