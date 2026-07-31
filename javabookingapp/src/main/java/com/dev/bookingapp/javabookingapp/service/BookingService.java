@@ -37,6 +37,7 @@ public class BookingService {
     private final AvailabilityService availabilityService;
     private final BookingNotificationService bookingNotificationService;
     private final BookingManageTokenService manageTokenService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public BookingResponse getById(UUID businessId, UUID bookingId) {
@@ -92,6 +93,9 @@ public class BookingService {
             throw new BadRequestException("This service is not available to book");
         }
 
+        validateCustomerAddress(service,
+                request.getAddressLine1(), request.getAddressCity(), request.getAddressPostcode());
+
         // Reject anything that isn't an open slot on the business schedule
         // (covers opening hours, breaks, blocked times, notice/advance limits and clashes)
         availabilityService.ensureSlotAvailable(business, service, request.getStartDatetime());
@@ -105,6 +109,10 @@ public class BookingService {
         bookingRequest.setCustomerNotes(request.getCustomerNotes());
         bookingRequest.setEmailReminder(Boolean.TRUE.equals(request.getEmailReminder()));
         bookingRequest.setSmsReminder(Boolean.TRUE.equals(request.getSmsReminder()));
+        bookingRequest.setAddressLine1(request.getAddressLine1());
+        bookingRequest.setAddressLine2(request.getAddressLine2());
+        bookingRequest.setAddressCity(request.getAddressCity());
+        bookingRequest.setAddressPostcode(request.getAddressPostcode());
 
         BookingResponse created = create(businessId, bookingRequest);
 
@@ -165,6 +173,7 @@ public class BookingService {
         // which bypasses the entity's @Builder.Default.
         request.setEmailReminder(Boolean.TRUE.equals(request.getEmailReminder()));
         request.setSmsReminder(Boolean.TRUE.equals(request.getSmsReminder()));
+        request.setAddressPostcode(normalizePostcode(request.getAddressPostcode()));
 
         Booking booking = bookingMapper.toEntity(request);
         booking.setBusiness(business);
@@ -180,6 +189,10 @@ public class BookingService {
         booking.setPrice(service.getPrice());
 
         Booking saved = bookingRepository.save(booking);
+        if (saved.getAddressPostcode() != null) {
+            // Handled after commit (async) — drive-distance lookup
+            eventPublisher.publishEvent(new BookingCreatedEvent(saved.getId()));
+        }
         return bookingMapper.toResponse(saved);
     }
 
@@ -266,5 +279,47 @@ public class BookingService {
         return staff != null
                 ? "Staff member has a conflicting booking at this time"
                 : "There is already a booking at this time";
+    }
+
+    private static final java.util.regex.Pattern UK_POSTCODE =
+            java.util.regex.Pattern.compile("^[A-Z]{1,2}\\d[A-Z\\d]?\\s?\\d[A-Z]{2}$");
+
+    /**
+     * Mobile-visit services need somewhere to go: line 1, city and a valid UK
+     * postcode are required iff the service carries the flag. Package-private
+     * so {@link GuestBookingService} can reject before sending an OTP email.
+     */
+    static void validateCustomerAddress(Service service,
+                                        String line1, String city, String postcode) {
+        if (!Boolean.TRUE.equals(service.getRequiresCustomerAddress())) {
+            return;
+        }
+        if (isBlank(line1) || isBlank(city) || isBlank(postcode)) {
+            throw new BadRequestException(
+                    "This service takes place at your address — please provide "
+                            + "address line 1, city and postcode");
+        }
+        if (!UK_POSTCODE.matcher(normalizePostcode(postcode)).matches()) {
+            throw new BadRequestException("Please enter a valid UK postcode");
+        }
+    }
+
+    /**
+     * Uppercase with the canonical single space before the 3-character inward
+     * code ("sw1a1aa" → "SW1A 1AA"). Input that isn't postcode-shaped is
+     * returned trimmed/uppercased for the validator to reject with a clear
+     * message rather than mangled here.
+     */
+    static String normalizePostcode(String postcode) {
+        if (postcode == null) return null;
+        String compact = postcode.toUpperCase().replaceAll("\\s+", "");
+        if (compact.isEmpty()) return null;
+        if (compact.length() < 5 || compact.length() > 7) return compact;
+        return compact.substring(0, compact.length() - 3) + " "
+                + compact.substring(compact.length() - 3);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

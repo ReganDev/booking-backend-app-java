@@ -115,6 +115,44 @@ class BookingNotificationServiceTest {
         assertThat(text).doesNotContain("Cancel or reschedule");
     }
 
+    private String sentTextFor(BookingResponse booking) {
+        notificationService.sendBookingDetails(business, booking, "jane@example.com", null);
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).send(any(), any(), any(), any(), textCaptor.capture());
+        return textCaptor.getValue();
+    }
+
+    @Test
+    void detailsEmailIncludesTheAddressWhenPresent() {
+        BookingResponse withAddress = booking(BookingStatus.CONFIRMED);
+        withAddress.setAddressLine1("1 High Street");
+        withAddress.setAddressCity("Manchester");
+        withAddress.setAddressPostcode("M1 1AE");
+
+        assertThat(sentTextFor(withAddress))
+                .contains("Where: 1 High Street, Manchester, M1 1AE");
+    }
+
+    @Test
+    void detailsEmailIncludesAddressLine2AfterLine1WhenPresent() {
+        BookingResponse withAddress = booking(BookingStatus.CONFIRMED);
+        withAddress.setAddressLine1("1 High Street");
+        withAddress.setAddressLine2("Flat 2");
+        withAddress.setAddressCity("Manchester");
+        withAddress.setAddressPostcode("M1 1AE");
+
+        assertThat(sentTextFor(withAddress))
+                .contains("Where: 1 High Street, Flat 2, Manchester, M1 1AE");
+    }
+
+    @Test
+    void detailsEmailOmitsTheWhereLineWithoutAnAddress() {
+        String text = sentText(BookingStatus.CONFIRMED);
+
+        assertThat(text).doesNotContain("Where:");
+    }
+
     @Test
     void businessCancelNoticeNamesCustomerServiceAndFreedSlot() {
         notificationService.sendBusinessCancelledNotice(

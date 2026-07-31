@@ -67,6 +67,26 @@ public class Booking extends BaseEntity {
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
 
+    // Customer's address for mobile-visit services; null for on-site bookings
+    @Column(name = "address_line1")
+    private String addressLine1;
+
+    @Column(name = "address_line2")
+    private String addressLine2;
+
+    @Column(name = "address_city")
+    private String addressCity;
+
+    @Column(name = "address_postcode", length = 10)
+    private String addressPostcode;
+
+    // Best-effort drive distance from the business, filled in asynchronously
+    @Column(name = "distance_meters")
+    private Integer distanceMeters;
+
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
+
     @Column(name = "email_reminder", nullable = false)
     @Builder.Default
     private Boolean emailReminder = false;

@@ -63,6 +63,8 @@ class BookingServiceTest {
     private BookingNotificationService bookingNotificationService;
     @Mock
     private BookingManageTokenService manageTokenService;
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private BookingService bookingService;
@@ -407,6 +409,123 @@ class BookingServiceTest {
 
         assertThat(booking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(booking.getCancelledAt()).isNull();
+    }
+
+    @Test
+    void mobileServiceBookingRejectedWhenAddressIsMissing() {
+        service.setRequiresCustomerAddress(true);
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("address");
+        verify(availabilityService, never()).ensureSlotAvailable(any(), any(), any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void mobileServiceBookingRejectedWhenPostcodeIsInvalid() {
+        service.setRequiresCustomerAddress(true);
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+
+        PublicBookingRequest request = publicRequest();
+        request.setAddressLine1("1 High Street");
+        request.setAddressCity("Manchester");
+        request.setAddressPostcode("NOT A CODE");
+
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), request, customerAccount.getId()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("postcode");
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void mobileServiceBookingCarriesNormalizedAddressThroughToTheEntityMapping() {
+        service.setRequiresCustomerAddress(true);
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getOrCreateFromUser(any(), any())).thenReturn(
+                CustomerResponse.builder().id(customer.getId()).build());
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        PublicBookingRequest request = publicRequest();
+        request.setAddressLine1("1 High Street");
+        request.setAddressLine2("Flat 2");
+        request.setAddressCity("Manchester");
+        request.setAddressPostcode("  sw1a1aa ");
+
+        bookingService.createPublicBooking(business.getId(), request, customerAccount.getId());
+
+        ArgumentCaptor<BookingRequest> captor = ArgumentCaptor.forClass(BookingRequest.class);
+        verify(bookingMapper).toEntity(captor.capture());
+        BookingRequest mapped = captor.getValue();
+        assertThat(mapped.getAddressLine1()).isEqualTo("1 High Street");
+        assertThat(mapped.getAddressLine2()).isEqualTo("Flat 2");
+        assertThat(mapped.getAddressCity()).isEqualTo("Manchester");
+        assertThat(mapped.getAddressPostcode()).isEqualTo("SW1A 1AA");
+    }
+
+    @Test
+    void bookingWithPostcodePublishesDistanceEventAfterSave() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        Booking entity = new Booking();
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(entity);
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
+            Booking saved = inv.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            // The mocked mapper doesn't copy fields, so mimic the postcode landing
+            saved.setAddressPostcode("M1 1AE");
+            return saved;
+        });
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.create(business.getId(), directRequest());
+
+        verify(eventPublisher).publishEvent(new BookingCreatedEvent(entity.getId()));
+    }
+
+    @Test
+    void bookingWithoutPostcodePublishesNoEvent() {
+        createAndCaptureSavedBooking();
+
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void ordinaryServiceStillBooksWithoutAnyAddress() {
+        // Regression guard: the address requirement must not leak onto
+        // services that never asked for it.
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getOrCreateFromUser(any(), any())).thenReturn(
+                CustomerResponse.builder().id(customer.getId()).build());
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        bookingService.createPublicBooking(
+                business.getId(), publicRequest(), customerAccount.getId());
+
+        verify(bookingRepository).save(any(Booking.class));
     }
 
     @Test

@@ -17,6 +17,7 @@ import com.dev.bookingapp.javabookingapp.mapper.BookingMapper;
 import com.dev.bookingapp.javabookingapp.repository.BookingRepository;
 import com.dev.bookingapp.javabookingapp.repository.BookingSeriesRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -49,6 +50,7 @@ public class BookingSeriesService {
     private final ServiceService serviceService;
     private final UserService userService;
     private final RecurrenceCalculator recurrenceCalculator;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public RecurringBookingResponse create(UUID businessId, RecurringBookingRequest request) {
@@ -95,6 +97,7 @@ public class BookingSeriesService {
 
         List<Booking> toCreate = new ArrayList<>();
         List<RecurringBookingResponse.SkippedOccurrence> skipped = new ArrayList<>();
+        String postcode = BookingService.normalizePostcode(request.getAddressPostcode());
 
         for (OffsetDateTime start : starts) {
             OffsetDateTime end = start.plusMinutes(blockMinutes);
@@ -126,6 +129,10 @@ public class BookingSeriesService {
                     .price(service.getPrice())
                     .customerNotes(request.getCustomerNotes())
                     .internalNotes(request.getInternalNotes())
+                    .addressLine1(request.getAddressLine1())
+                    .addressLine2(request.getAddressLine2())
+                    .addressCity(request.getAddressCity())
+                    .addressPostcode(postcode)
                     .emailReminder(Boolean.TRUE.equals(request.getEmailReminder()))
                     .smsReminder(Boolean.TRUE.equals(request.getSmsReminder()))
                     .build());
@@ -150,8 +157,16 @@ public class BookingSeriesService {
 
         toCreate.forEach(booking -> booking.setSeries(series));
 
-        List<BookingResponse> created = bookingRepository.saveAll(toCreate)
-                .stream()
+        List<Booking> saved = bookingRepository.saveAll(toCreate);
+
+        // One event for the whole series: every occurrence shares an address, so
+        // the distance listener computes the route once and copies it to the
+        // siblings rather than hitting the geo services once per occurrence.
+        if (saved.get(0).getAddressPostcode() != null) {
+            eventPublisher.publishEvent(new BookingCreatedEvent(saved.get(0).getId()));
+        }
+
+        List<BookingResponse> created = saved.stream()
                 .map(bookingMapper::toResponse)
                 .toList();
 

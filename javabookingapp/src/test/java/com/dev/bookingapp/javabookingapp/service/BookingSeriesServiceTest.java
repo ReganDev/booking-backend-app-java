@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -35,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,6 +60,8 @@ class BookingSeriesServiceTest {
     private ServiceService serviceService;
     @Mock
     private UserService userService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private BookingSeriesService seriesService;
 
@@ -73,7 +77,7 @@ class BookingSeriesServiceTest {
         seriesService = new BookingSeriesService(
                 bookingRepository, bookingSeriesRepository, bookingMapper, bookingService,
                 businessService, customerService, serviceService, userService,
-                new RecurrenceCalculator());
+                new RecurrenceCalculator(), eventPublisher);
 
         business = Business.builder()
                 .id(UUID.randomUUID())
@@ -135,6 +139,7 @@ class BookingSeriesServiceTest {
                 });
         lenient().when(bookingRepository.saveAll(any())).thenAnswer(invocation -> {
             List<Booking> bookings = invocation.getArgument(0);
+            bookings.forEach(booking -> booking.setId(UUID.randomUUID()));
             return bookings;
         });
         lenient().when(bookingMapper.toResponse(any(Booking.class)))
@@ -297,6 +302,75 @@ class BookingSeriesServiceTest {
                 .hasMessageContaining("Staff does not belong");
 
         verify(bookingRepository, never()).saveAll(any());
+    }
+
+    private RecurringBookingRequest requestWithAddress(RecurrenceFrequency frequency, int count) {
+        RecurringBookingRequest request = request(frequency, count);
+        request.setAddressLine1("1 High Street");
+        request.setAddressLine2("Flat 2");
+        request.setAddressCity("Manchester");
+        request.setAddressPostcode("m11ae");
+        return request;
+    }
+
+    @Test
+    void copiesTheCustomerAddressOntoEveryOccurrence() {
+        stubLookups();
+        stubSaves();
+        when(bookingService.hasConflict(any(), any(), any(), any(), any())).thenReturn(false);
+
+        seriesService.create(business.getId(), requestWithAddress(RecurrenceFrequency.WEEKLY, 3));
+
+        List<Booking> saved = captureSavedBookings();
+        assertThat(saved).hasSize(3);
+        assertThat(saved).extracting(Booking::getAddressLine1).containsOnly("1 High Street");
+        assertThat(saved).extracting(Booking::getAddressLine2).containsOnly("Flat 2");
+        assertThat(saved).extracting(Booking::getAddressCity).containsOnly("Manchester");
+        assertThat(saved).extracting(Booking::getAddressPostcode).containsOnly("M1 1AE");
+    }
+
+    @Test
+    void publishesOneDistanceEventForTheFirstCreatedOccurrence() {
+        stubLookups();
+        stubSaves();
+        when(bookingService.hasConflict(any(), any(), any(), any(), any())).thenReturn(false);
+
+        seriesService.create(business.getId(), requestWithAddress(RecurrenceFrequency.WEEKLY, 4));
+
+        ArgumentCaptor<BookingCreatedEvent> eventCaptor =
+                ArgumentCaptor.forClass(BookingCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        List<Booking> saved = captureSavedBookings();
+        assertThat(saved.get(0).getId()).isNotNull();
+        assertThat(eventCaptor.getValue().bookingId()).isEqualTo(saved.get(0).getId());
+    }
+
+    @Test
+    void distanceEventCarriesTheFirstSurvivingOccurrenceWhenTheFirstClashes() {
+        stubLookups();
+        stubSaves();
+        when(bookingService.hasConflict(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> start.equals(invocation.getArgument(2)));
+
+        seriesService.create(business.getId(), requestWithAddress(RecurrenceFrequency.WEEKLY, 3));
+
+        ArgumentCaptor<BookingCreatedEvent> eventCaptor =
+                ArgumentCaptor.forClass(BookingCreatedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        List<Booking> saved = captureSavedBookings();
+        assertThat(saved.get(0).getStartDatetime()).isEqualTo(start.plusWeeks(1));
+        assertThat(eventCaptor.getValue().bookingId()).isEqualTo(saved.get(0).getId());
+    }
+
+    @Test
+    void publishesNoDistanceEventWithoutAPostcode() {
+        stubLookups();
+        stubSaves();
+        when(bookingService.hasConflict(any(), any(), any(), any(), any())).thenReturn(false);
+
+        seriesService.create(business.getId(), request(RecurrenceFrequency.WEEKLY, 3));
+
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

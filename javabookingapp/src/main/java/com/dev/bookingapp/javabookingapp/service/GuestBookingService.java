@@ -67,7 +67,10 @@ public class GuestBookingService {
             throw new BadRequestException("This service is not available to book");
         }
 
-        // Reject anything that isn't an open slot before sending any email
+        // Reject a missing/invalid address for mobile-visit services and
+        // anything that isn't an open slot before sending any email
+        BookingService.validateCustomerAddress(bookedService,
+                request.getAddressLine1(), request.getAddressCity(), request.getAddressPostcode());
         availabilityService.ensureSlotAvailable(business, bookedService, request.getStartDatetime());
 
         String email = EmailVerificationService.normalizeEmail(request.getEmail());
@@ -118,6 +121,10 @@ public class GuestBookingService {
                 .service(bookedService)
                 .startDatetime(request.getStartDatetime())
                 .customerNotes(request.getCustomerNotes())
+                .addressLine1(request.getAddressLine1())
+                .addressLine2(request.getAddressLine2())
+                .addressCity(request.getAddressCity())
+                .addressPostcode(BookingService.normalizePostcode(request.getAddressPostcode()))
                 .emailReminder(Boolean.TRUE.equals(request.getEmailReminder()))
                 .smsReminder(Boolean.TRUE.equals(request.getSmsReminder()))
                 .newAccount(newAccount)
@@ -186,6 +193,10 @@ public class GuestBookingService {
         bookingRequest.setCustomerNotes(session.getCustomerNotes());
         bookingRequest.setEmailReminder(session.getEmailReminder());
         bookingRequest.setSmsReminder(session.getSmsReminder());
+        bookingRequest.setAddressLine1(session.getAddressLine1());
+        bookingRequest.setAddressLine2(session.getAddressLine2());
+        bookingRequest.setAddressCity(session.getAddressCity());
+        bookingRequest.setAddressPostcode(session.getAddressPostcode());
 
         // Re-validates the slot and sends the booking-details email
         BookingResponse created = bookingService.createPublicBooking(

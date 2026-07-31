@@ -1,1 +1,4 @@
 .idea/
+
+# Local Claude Code scratch (git worktrees); skills/settings stay tracked
+.claude/worktrees/

@@ -11,6 +11,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Sends booking-details emails to customers who opted in. Best-effort: a
@@ -58,10 +60,13 @@ public class BookingNotificationService {
                 ? "Need to make a change? Cancel or reschedule your booking here:\n"
                         + manageLink + "\n\n"
                 : "";
+        String address = joinAddress(booking);
+        String whereLine = address.isEmpty() ? "" : "Where: " + address + "\n";
         String text = "Hi " + booking.getCustomer().getFirstName() + ",\n\n"
                 + intro
                 + "Service: " + booking.getService().getName() + "\n"
                 + "When: " + when + "\n"
+                + whereLine
                 + "Duration: " + booking.getService().getDurationMinutes() + " minutes\n"
                 + priceLine
                 + outro
@@ -79,6 +84,14 @@ public class BookingNotificationService {
         } catch (Exception ex) {
             log.error("Failed to send booking details email for booking {}", booking.getId(), ex);
         }
+    }
+
+    /** The customer address for mobile-visit bookings, empty when not collected. */
+    private static String joinAddress(BookingResponse booking) {
+        return Stream.of(booking.getAddressLine1(), booking.getAddressLine2(),
+                        booking.getAddressCity(), booking.getAddressPostcode())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(Collectors.joining(", "));
     }
 
     /** Tells the business a customer cancelled online. Best-effort. */

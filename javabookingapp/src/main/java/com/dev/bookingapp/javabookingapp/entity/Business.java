@@ -47,6 +47,15 @@ public class Business extends BaseEntity {
     @Builder.Default
     private String country = "United Kingdom";
 
+    // Cached geocode of postalCode for drive-distance calculations; valid
+    // only while geocodedPostcode still matches the current postalCode
+    private Double latitude;
+
+    private Double longitude;
+
+    @Column(name = "geocoded_postcode", length = 10)
+    private String geocodedPostcode;
+
     // Settings
     @Builder.Default
     @Column(nullable = false)

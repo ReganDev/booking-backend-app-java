@@ -28,4 +28,6 @@ public class ServiceRequest {
     private Integer displayOrder;
 
     private Boolean isActive;
+
+    private Boolean requiresCustomerAddress;
 }

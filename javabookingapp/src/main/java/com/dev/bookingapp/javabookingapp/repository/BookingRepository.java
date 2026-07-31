@@ -85,4 +85,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
      */
     List<Booking> findBySeriesIdAndStartDatetimeGreaterThanEqualAndStatusIn(
             UUID seriesId, OffsetDateTime start, Collection<BookingStatus> statuses);
+
+    List<Booking> findBySeriesId(UUID seriesId);
 }

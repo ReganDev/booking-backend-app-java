@@ -66,6 +66,10 @@ public class ServiceService {
         if (service.getIsActive() == null) {
             service.setIsActive(true);
         }
+        // MapStruct's builder call bypasses @Builder.Default and the column is NOT NULL
+        if (service.getRequiresCustomerAddress() == null) {
+            service.setRequiresCustomerAddress(false);
+        }
 
         com.dev.bookingapp.javabookingapp.entity.Service saved = serviceRepository.save(service);
         return serviceMapper.toResponse(saved);

@@ -38,6 +38,19 @@ public class BookingOtpSession {
     @Column(name = "customer_notes")
     private String customerNotes;
 
+    // Customer address for mobile-visit services, carried until verify()
+    @Column(name = "address_line1")
+    private String addressLine1;
+
+    @Column(name = "address_line2")
+    private String addressLine2;
+
+    @Column(name = "address_city")
+    private String addressCity;
+
+    @Column(name = "address_postcode", length = 10)
+    private String addressPostcode;
+
     @Builder.Default
     @Column(name = "email_reminder", nullable = false)
     private Boolean emailReminder = true;
