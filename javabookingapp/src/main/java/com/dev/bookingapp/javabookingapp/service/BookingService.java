@@ -93,8 +93,8 @@ public class BookingService {
             throw new BadRequestException("This service is not available to book");
         }
 
-        validateCustomerAddress(service,
-                request.getAddressLine1(), request.getAddressCity(), request.getAddressPostcode());
+        validateCustomerAddress(service, request.getAddressLine1(), request.getAddressLine2(),
+                request.getAddressCity(), request.getAddressPostcode());
 
         // Reject anything that isn't an open slot on the business schedule
         // (covers opening hours, breaks, blocked times, notice/advance limits and clashes)
@@ -173,7 +173,7 @@ public class BookingService {
         // which bypasses the entity's @Builder.Default.
         request.setEmailReminder(Boolean.TRUE.equals(request.getEmailReminder()));
         request.setSmsReminder(Boolean.TRUE.equals(request.getSmsReminder()));
-        request.setAddressPostcode(normalizePostcode(request.getAddressPostcode()));
+        request.setAddressPostcode(requireValidPostcodeIfPresent(request.getAddressPostcode()));
 
         Booking booking = bookingMapper.toEntity(request);
         booking.setBusiness(business);
@@ -285,13 +285,33 @@ public class BookingService {
             java.util.regex.Pattern.compile("^[A-Z]{1,2}\\d[A-Z\\d]?\\s?\\d[A-Z]{2}$");
 
     /**
-     * Mobile-visit services need somewhere to go: line 1, city and a valid UK
-     * postcode are required iff the service carries the flag. Package-private
-     * so {@link GuestBookingService} can reject before sending an OTP email.
+     * Rejects a supplied postcode that isn't UK-shaped, returning the
+     * normalised form; null or blank stays null. Every write path funnels
+     * through here so a malformed postcode can never be persisted or handed
+     * to {@link PostcodesIoClient}.
      */
-    static void validateCustomerAddress(Service service,
-                                        String line1, String city, String postcode) {
+    static String requireValidPostcodeIfPresent(String postcode) {
+        String normalized = normalizePostcode(postcode);
+        if (normalized != null && !UK_POSTCODE.matcher(normalized).matches()) {
+            throw new BadRequestException("Please enter a valid UK postcode");
+        }
+        return normalized;
+    }
+
+    /**
+     * Mobile-visit services need somewhere to go: line 1, city and a valid UK
+     * postcode are required iff the service carries the flag. A service that
+     * doesn't collect an address must not be sent one either — otherwise an
+     * unauthenticated caller could attach arbitrary address text to any
+     * booking. Package-private so {@link GuestBookingService} can reject
+     * before sending an OTP email.
+     */
+    static void validateCustomerAddress(Service service, String line1, String line2,
+                                        String city, String postcode) {
         if (!Boolean.TRUE.equals(service.getRequiresCustomerAddress())) {
+            if (!isBlank(line1) || !isBlank(line2) || !isBlank(city) || !isBlank(postcode)) {
+                throw new BadRequestException("This service does not collect a customer address");
+            }
             return;
         }
         if (isBlank(line1) || isBlank(city) || isBlank(postcode)) {

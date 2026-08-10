@@ -97,7 +97,7 @@ public class BookingSeriesService {
 
         List<Booking> toCreate = new ArrayList<>();
         List<RecurringBookingResponse.SkippedOccurrence> skipped = new ArrayList<>();
-        String postcode = BookingService.normalizePostcode(request.getAddressPostcode());
+        String postcode = BookingService.requireValidPostcodeIfPresent(request.getAddressPostcode());
 
         for (OffsetDateTime start : starts) {
             OffsetDateTime end = start.plusMinutes(blockMinutes);

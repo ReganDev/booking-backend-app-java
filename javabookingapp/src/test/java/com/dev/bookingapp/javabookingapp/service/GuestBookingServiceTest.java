@@ -211,6 +211,21 @@ class GuestBookingServiceTest {
     }
 
     @Test
+    void startRejectsAnAddressOnAServiceThatDoesNotCollectOne() {
+        // requiresCustomerAddress stays false: a guest must not be able to
+        // stash arbitrary address text on the OTP session either.
+        startRequest.setAddressLine1("1 High Street");
+        startRequest.setAddressPostcode("M1 1AE");
+
+        assertThatThrownBy(() -> service.start(startRequest))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not collect a customer address");
+        verify(userRepository, never()).save(any());
+        verify(sessionRepository, never()).save(any());
+        verify(emailSender, never()).send(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void startPersistsNormalizedAddressOnTheOtpSession() {
         bookableService.setRequiresCustomerAddress(true);
         startRequest.setAddressLine1("1 High Street");

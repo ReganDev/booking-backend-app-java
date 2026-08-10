@@ -71,8 +71,9 @@ public class BookingDistanceService {
         Optional<PostcodesIoClient.Coordinates> destination =
                 postcodesIoClient.lookup(booking.getAddressPostcode());
         if (destination.isEmpty()) {
-            log.warn("Customer postcode '{}' did not geocode for booking {}",
-                    booking.getAddressPostcode(), bookingId);
+            // Booking id only: a postcode narrows to a handful of households,
+            // so it stays out of the logs. Look the booking up to see it.
+            log.warn("Customer postcode did not geocode for booking {}", bookingId);
             return;
         }
 
