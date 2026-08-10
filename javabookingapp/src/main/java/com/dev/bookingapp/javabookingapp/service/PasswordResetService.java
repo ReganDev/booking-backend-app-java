@@ -40,7 +40,7 @@ public class PasswordResetService {
     @Value("${app.password-reset.resend-interval:60s}")
     private Duration resendInterval;
 
-    @Value("${app.frontend-url:http://localhost:3000}")
+    @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
 
     /** Issues a reset link for the given address. Callers must return the same

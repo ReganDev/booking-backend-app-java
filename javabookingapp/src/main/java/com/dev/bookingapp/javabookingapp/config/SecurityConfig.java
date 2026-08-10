@@ -66,10 +66,15 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // The dashboard at app.bookingbase.co.uk reaches the API same-origin
+        // through its /api/* rewrite, so these patterns only matter for local
+        // development and for the apex marketing site. "https://*.vercel.app"
+        // used to be here and was dropped: it let any site on anyone's Vercel
+        // account make credentialed requests, and preview deploys proxy
+        // same-origin anyway so they never needed it.
         configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:*",
                 "http://127.0.0.1:*",
-                "https://*.vercel.app",
                 "https://bookingbase.co.uk",
                 "https://*.bookingbase.co.uk"
         ));

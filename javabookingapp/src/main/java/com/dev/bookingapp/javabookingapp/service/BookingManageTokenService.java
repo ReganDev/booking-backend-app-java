@@ -27,7 +27,7 @@ public class BookingManageTokenService {
 
     private final BookingManageTokenRepository tokenRepository;
 
-    @Value("${app.frontend-url:http://localhost:3000}")
+    @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
 
     /** Issues (or replaces) the manage token for a booking; returns the full link. */
