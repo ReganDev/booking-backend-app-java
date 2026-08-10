@@ -2,7 +2,7 @@
 
 _Last updated: 2026-07-18_
 
-Base URL: `/api/v1` (production: `https://booking-backend-app-java-production.up.railway.app/api/v1`, also reachable through the Vercel frontend's `/api/v1` rewrite).
+Base URL: `/api/v1` (production: `https://app.bookingbase.co.uk/api/v1`, served by the dashboard host's `/api/*` rewrite to Railway; the Railway origin URL is an implementation detail and is not the public API address).
 
 All request and response bodies are JSON. Authenticated endpoints expect
 `Authorization: Bearer <accessToken>`.

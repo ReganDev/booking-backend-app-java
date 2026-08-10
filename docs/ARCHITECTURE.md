@@ -6,15 +6,19 @@ _Last updated: 2026-07-18_
 
 | Layer | Repo | Tech | Hosted on |
 |---|---|---|---|
-| App frontend | `bookingsystem-frontend` | React + TypeScript + Vite | Vercel |
-| Backend API | `booking-backend-app-java` | Java 21, Spring Boot 4 | Railway |
+| App frontend | `bookingsystem-frontend` | React + TypeScript + Vite | Vercel, at `app.bookingbase.co.uk` |
+| Backend API | `booking-backend-app-java` | Java 21, Spring Boot 4 | Railway, reached via `app.bookingbase.co.uk/api/*` |
 | Database | (schema in this repo, `db/migration`) | PostgreSQL + Flyway | Supabase |
-| Landing page | `booking-landing-page` | Static React site | Separate static host, no API connection |
+| Landing page | `booking-landing-page` | Static React site | `bookingbase.co.uk`, no API connection |
 
 In production the frontend calls the API with relative `/api/v1/...` paths and
 Vercel rewrites them to Railway (`vercel.json`), so the browser never makes a
 cross-origin request. Locally, the Vite dev server proxies `/api` to
 `localhost:8080` the same way.
+
+That rewrite is why `vercel.json`'s destination must stay the Railway origin
+hostname. Pointing it at `app.bookingbase.co.uk` would make Vercel rewrite to
+itself and loop.
 
 The database schema is owned entirely by the Flyway migrations in
 `src/main/resources/db/migration`. Hibernate runs with `ddl-auto=validate` and
@@ -129,7 +133,12 @@ Two mechanisms work together:
 
 Backend env vars used in production: `DATABASE_URL`, `JWT_SECRET`, `PORT`
 (Railway-injected), `REGISTRATION_ENABLED`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
-`RESEND_API_KEY`, `RESEND_FROM`, `ENQUIRY_TO`.
+`RESEND_API_KEY`, `RESEND_FROM`, `ENQUIRY_TO`, `APP_FRONTEND_URL`.
+
+`APP_FRONTEND_URL` is the base for every link emailed to a user, so it must be
+the dashboard host (`https://app.bookingbase.co.uk`) — those routes live in the
+React app, not the API. It defaults to that value, so setting it in Railway is
+only needed to override.
 
 Run locally:
 

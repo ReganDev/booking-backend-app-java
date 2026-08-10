@@ -42,7 +42,7 @@ public class EmailVerificationService {
     @Value("${app.email-verification.resend-interval:60s}")
     private Duration resendInterval;
 
-    @Value("${app.frontend-url:http://localhost:3000}")
+    @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
 
     @Transactional
