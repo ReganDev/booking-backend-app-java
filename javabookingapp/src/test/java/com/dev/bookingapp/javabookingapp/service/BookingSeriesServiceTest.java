@@ -330,6 +330,20 @@ class BookingSeriesServiceTest {
     }
 
     @Test
+    void rejectsAMalformedPostcodeBeforeWritingAnyOccurrence() {
+        stubLookups();
+
+        RecurringBookingRequest request = requestWithAddress(RecurrenceFrequency.WEEKLY, 3);
+        request.setAddressPostcode("../../x");
+
+        assertThatThrownBy(() -> seriesService.create(business.getId(), request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("postcode");
+        verify(bookingRepository, never()).saveAll(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
     void publishesOneDistanceEventForTheFirstCreatedOccurrence() {
         stubLookups();
         stubSaves();

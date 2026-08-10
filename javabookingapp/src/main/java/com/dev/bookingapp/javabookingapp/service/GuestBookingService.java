@@ -69,8 +69,8 @@ public class GuestBookingService {
 
         // Reject a missing/invalid address for mobile-visit services and
         // anything that isn't an open slot before sending any email
-        BookingService.validateCustomerAddress(bookedService,
-                request.getAddressLine1(), request.getAddressCity(), request.getAddressPostcode());
+        BookingService.validateCustomerAddress(bookedService, request.getAddressLine1(),
+                request.getAddressLine2(), request.getAddressCity(), request.getAddressPostcode());
         availabilityService.ensureSlotAvailable(business, bookedService, request.getStartDatetime());
 
         String email = EmailVerificationService.normalizeEmail(request.getEmail());

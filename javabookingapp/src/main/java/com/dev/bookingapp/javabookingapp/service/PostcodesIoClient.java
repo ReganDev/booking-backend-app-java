@@ -57,7 +57,8 @@ public class PostcodesIoClient {
             return Optional.of(new Coordinates(
                     response.result().latitude(), response.result().longitude()));
         } catch (RuntimeException ex) {
-            log.warn("Postcode lookup failed for '{}': {}", postcode, ex.getMessage());
+            // The postcode itself is personal data; log the failure, not the value.
+            log.warn("Postcode lookup failed: {}", ex.getMessage());
             return Optional.empty();
         }
     }

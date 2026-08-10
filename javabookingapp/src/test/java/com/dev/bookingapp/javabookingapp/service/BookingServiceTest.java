@@ -529,6 +529,81 @@ class BookingServiceTest {
     }
 
     @Test
+    void ordinaryServiceRejectsAnAddressItNeverAskedFor() {
+        // An unauthenticated caller must not be able to attach address text to
+        // a service that doesn't collect one: it lands on the owner's
+        // dashboard and is fed to the geocoder.
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+
+        PublicBookingRequest request = publicRequest();
+        request.setAddressLine1("1 High Street");
+
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), request, customerAccount.getId()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not collect a customer address");
+        verify(availabilityService, never()).ensureSlotAvailable(any(), any(), any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void ordinaryServiceRejectsAStrayPostcodeOnItsOwn() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+
+        PublicBookingRequest request = publicRequest();
+        request.setAddressPostcode("../../x");
+
+        assertThatThrownBy(() -> bookingService.createPublicBooking(
+                business.getId(), request, customerAccount.getId()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not collect a customer address");
+        verify(bookingRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void ownerBookingRejectsAMalformedPostcodeBeforeItReachesTheGeocoder() {
+        // The owner path allows an optional address on any service, but the
+        // postcode still has to be a postcode.
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+
+        BookingRequest request = directRequest();
+        request.setAddressPostcode("NOTAPC");
+
+        assertThatThrownBy(() -> bookingService.create(business.getId(), request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("postcode");
+        verify(bookingRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void ownerBookingKeepsAValidPostcodeNormalized() {
+        when(businessService.getEntityById(business.getId())).thenReturn(business);
+        when(serviceService.getEntityById(service.getId())).thenReturn(service);
+        when(customerService.getEntityById(customer.getId())).thenReturn(customer);
+        when(bookingMapper.toEntity(any(BookingRequest.class))).thenReturn(new Booking());
+        when(bookingRepository.findConflictingBusinessBookings(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingMapper.toResponse(any(Booking.class)))
+                .thenReturn(BookingResponse.builder().build());
+
+        BookingRequest request = directRequest();
+        request.setAddressPostcode("  sw1a1aa ");
+
+        bookingService.create(business.getId(), request);
+
+        ArgumentCaptor<BookingRequest> captor = ArgumentCaptor.forClass(BookingRequest.class);
+        verify(bookingMapper).toEntity(captor.capture());
+        assertThat(captor.getValue().getAddressPostcode()).isEqualTo("SW1A 1AA");
+    }
+
+    @Test
     void publicBookingAlwaysSendsDetailsEmailWithManageLink() {
         when(businessService.getEntityById(business.getId())).thenReturn(business);
         when(serviceService.getEntityById(service.getId())).thenReturn(service);
